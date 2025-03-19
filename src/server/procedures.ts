@@ -1,10 +1,13 @@
-import { Pool } from "@neondatabase/serverless"
-import { PrismaNeon } from "@prisma/adapter-neon"
-import { PrismaClient } from "@prisma/client"
-import { Redis } from "@upstash/redis/cloudflare"
-import { env } from "hono/adapter"
-import { cacheExtension } from "./__internals/db/cache-extension"
+// import { env } from "process"
 import { j } from "./__internals/j"
+import { Redis } from "@upstash/redis/cloudflare"
+import { PrismaClient } from "@prisma/client"
+import { PrismaNeon } from "@prisma/adapter-neon"
+import { cacheExtension } from "./__internals/db/cache-extension"
+import { Pool } from "@neondatabase/serverless"
+import { db } from "@/db"
+import { HTTPException } from "hono/http-exception"
+import { currentUser } from "@clerk/nextjs/server"
 
 /**
  * Middleware for providing a built-in cache with your Prisma database.
@@ -12,26 +15,32 @@ import { j } from "./__internals/j"
  * You can remove this if you don't like it, but caching can massively speed up your database queries.
  */
 
-const extendedDatabaseMiddleware = j.middleware(async ({ c, next }) => {
-  const variables = env(c)
+const authMiddlewae = j.middleware(async ({ c, next }) => {
+  const authHeader = c.req.header("Authorization")
 
-  const pool = new Pool({
-    connectionString: variables.DATABASE_URL,
-  })
+  if (authHeader) {
+    const apiKey = authHeader.split(" ")[1]
 
-  const adapter = new PrismaNeon(pool)
+    const user = await db.user.findUnique({ where: { apiKey } })
 
-  const redis = new Redis({
-    token: variables.REDIS_TOKEN,
-    url: variables.REDIS_URL,
-  })
+    if (user) {
+      return next({ user })
+    }
+  }
 
-  const db = new PrismaClient({
-    adapter,
-  }).$extends(cacheExtension({ redis }))
+  const auth = await currentUser()
 
-  // Whatever you put inside of `next` is accessible to all following middlewares
-  return await next({ db })
+  if (!auth) {
+    throw new HTTPException(401, { message: "Unauthorized" })
+  }
+
+  const user = await db.user.findUnique({ where: { externalId: auth.id } })
+
+  if (!user) {
+    throw new HTTPException(401, { message: "Unauthorized" })
+  }
+
+  return next({ user })
 })
 
 /**
@@ -40,4 +49,5 @@ const extendedDatabaseMiddleware = j.middleware(async ({ c, next }) => {
  * This is the base piece you use to build new queries and mutations on your API.
  */
 export const baseProcedure = j.procedure
-export const publicProcedure = baseProcedure.use(extendedDatabaseMiddleware)
+export const publicProcedure = baseProcedure
+export const privateProcedure = publicProcedure.use(authMiddlewae)
