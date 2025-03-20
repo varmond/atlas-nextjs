@@ -5,7 +5,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
 import { client } from "@/lib/client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { format } from "date-fns"
+import { format, formatDistanceToNow } from "date-fns"
 import { ArrowRight, BarChart2, Clock, Database, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
@@ -88,7 +88,7 @@ export const DashboardPageContent = () => {
                   <span className="font-medium">Last ping:</span>
                   <span className="ml-1">
                     {category.lastPing
-                      ? formatDistanceFromNow(category.lastPing) + " ago"
+                      ? formatDistanceToNow(category.lastPing) + " ago"
                       : "Never"}
                   </span>
                 </div>
