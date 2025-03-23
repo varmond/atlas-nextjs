@@ -25,7 +25,7 @@ const Page = async ({ searchParams }: PageProps) => {
   const user = await db.user.findUnique({ where: { externalId: auth.id } })
 
   if (!user) {
-    redirect("/welcome")
+    return redirect("/welcome")
   }
 
   const intent = searchParams.intent
