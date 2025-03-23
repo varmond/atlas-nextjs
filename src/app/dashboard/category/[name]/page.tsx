@@ -10,7 +10,7 @@ interface PageProps {
   }
 }
 
-export const Page = async ({ params }: PageProps) => {
+const Page = async ({ params }: PageProps) => {
   if (typeof params.name !== "string") notFound()
 
   const auth = await currentUser()

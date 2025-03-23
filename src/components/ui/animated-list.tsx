@@ -1,8 +1,13 @@
 "use client"
 
-import React, { ReactElement, useEffect, useMemo, useState } from "react"
+import React, {
+  ReactElement,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { ReactNode } from "hono/jsx"
 
 export interface AnimatedListProps {
   className?: string
