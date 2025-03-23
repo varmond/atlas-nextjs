@@ -4,7 +4,17 @@ import { buttonVariants } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
 import { cn } from "@/utils"
 import { UserButton } from "@clerk/nextjs"
-import { Gem, Home, Key, LucideIcon, Menu, Settings, X } from "lucide-react"
+import {
+  Gem,
+  Home,
+  Key,
+  LucideIcon,
+  Menu,
+  Settings,
+  X,
+  Plus,
+  Table,
+} from "lucide-react"
 import Link from "next/link"
 import { PropsWithChildren, useState } from "react"
 import { Drawer } from "vaul"
@@ -40,6 +50,17 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
       },
     ],
   },
+  {
+    category: "Inventory",
+    items: [
+      { href: "/dashboard/add-inventory", icon: Plus, text: "Add Inventory" },
+      {
+        href: "/dashboard/view-inventory",
+        icon: Table,
+        text: "View Inventory",
+      },
+    ],
+  },
 ]
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
@@ -47,7 +68,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
     <div className="space-y-4 md:space-y-6 relative z-20 flex flex-col h-full">
       {/* logo */}
       <p className="hidden sm:block text-lg/7 font-semibold text-brand-900">
-        Ping<span className="text-brand-700">Panda</span>
+        Peppers<span className="text-brand-700">Atlas</span>
       </p>
 
       {/* navigation items */}
