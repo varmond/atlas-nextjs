@@ -33,7 +33,7 @@ export const EmptyCategoryState = ({
     if (hasEvents) router.refresh()
   }, [hasEvents, router])
 
-  const codeSnippet = `await fetch('http://localhost:3000/api/events', {
+  const codeSnippet = `await fetch('${process.env.NEXT_PUBLIC_APP_URL}/api/events', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY'
@@ -89,7 +89,7 @@ export const EmptyCategoryState = ({
         <div className="flex gap-2 items-center">
           <div className="size-2 bg-green-500 rounded-full animate-pulse" />
           <span className="text-sm text-gray-600">
-            Listing to incoming events...
+            Listening to incoming events...
           </span>
         </div>
 
