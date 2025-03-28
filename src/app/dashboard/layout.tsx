@@ -14,6 +14,8 @@ import {
   X,
   Plus,
   Table,
+  ListOrdered,
+  Package,
 } from "lucide-react"
 import Link from "next/link"
 import { PropsWithChildren, useState } from "react"
@@ -56,9 +58,20 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
       { href: "/dashboard/add-inventory", icon: Plus, text: "Add Inventory" },
       {
         href: "/dashboard/view-inventory",
-        icon: Table,
+        icon: ListOrdered,
         text: "View Inventory",
       },
+      // {
+      //   href: "/dashboard/inventory",
+      //   icon: Package,
+      //   text: "Manage Inventory",
+      // },
+    ],
+  },
+  {
+    category: "Products",
+    items: [
+      { href: "/dashboard/products", icon: Table, text: "View Products" },
     ],
   },
 ]
