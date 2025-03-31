@@ -34,7 +34,7 @@ model User {
   events         Event[]
   Quota          Quota[]
   // Products       Products[]
-  Organization   Organization[]
+  Organization   Organization?   @relation(fields: [organizationId], references: [id])
   Products       Products[]
 
   @@index([email, apiKey])
@@ -101,17 +101,19 @@ model Quota {
 
 model Products {
   id                        String       @id @default(cuid())
+  itemCode                  String
   name                      String
-  price                     Int
-  cost                      Int
+  price                     Decimal
+  packageCost               Decimal
   manufacturerBarcodeNumber String
-  code                      String
+  sku                       String
   type                      ProductType
-  uom                       String
-  unitsPer                  Int
-  quantity                  Int
-  quantityUOM               String
-  // user                      User         @relation(fields: [userId], references: [id])
+  packageUOM                String
+  containerUOM              String
+  quantityPerContainer      Int
+  unitUOM                   String
+  quantityPerUnit           Decimal
+  quantityPerUnitUOM        String       @default("EA")
   userId                    String
   organizationId            String
   Organization              Organization @relation(fields: [organizationId], references: [id])
