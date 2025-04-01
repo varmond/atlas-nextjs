@@ -23,10 +23,10 @@ export const DashboardPage = ({
     <section className="flex h-full w-full flex-1 flex-col">
       <div className="w-full flex justify-between border-b border-gray-200 p-6 sm:p-8">
         <div className="w-full flex flex-col sm:flex-row gap-x-8 gap-6 items-start sm:items-center">
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-10">
             {hideBackButton ? null : (
               <Button
-                onClick={() => router.push("/dashboard")}
+                onClick={() => router.push("./")}
                 className="w-fit bg-white"
                 variant={"outline"}
               >

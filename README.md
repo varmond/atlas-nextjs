@@ -1,7 +1,17 @@
-STAR THE REPO IF YOURE COOL
+# Atlas
 
-jStack - an opinionated stack to ship high-performance, low-cost Next.js apps inspired by the T3 stack.
+## Sidebar Pages
 
-This is an early-stage stack so probably dont use in production yet. If you're wild enough to do so despite this warning, let me know your website URL so I can feature you lol
+### Inventory
 
-documentation coming soon, for now just clone this repo, fill out the .env.example :))
+- Enter Inventory
+  - This will be "receive screen"
+- View Inventory
+  - View all inventory in stock and search (table)
+- On-hand Adjustment : TODO
+
+### Products
+
+- View Products
+  - Add product button on top
+  - item code in schema will be unique identifier on back end. On front end, we can have client set what they want this field called (sku, ndc, etc.)

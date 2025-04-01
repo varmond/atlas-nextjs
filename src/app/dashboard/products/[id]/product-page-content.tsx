@@ -1,6 +1,6 @@
 "use client"
 
-import { Products } from "@prisma/client"
+import { ProductType, UOM } from "@prisma/client"
 import { useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import {
@@ -19,10 +19,32 @@ import { Heading } from "@/components/heading"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import Link from "next/link"
 import { EditProductModal } from "@/components/edit-product-modal"
-import { useSearchParams } from "next/navigation"
+import { getUOMLabel } from "@/utils"
+
+// Define a serialized version of the Products type for client components
+interface SerializedProduct {
+  id: string
+  itemCode: string
+  name: string
+  price: string
+  packageCost: string
+  manufacturerBarcodeNumber: string
+  sku: string
+  type: ProductType
+  packageUOM: UOM
+  containerUOM: UOM
+  quantityPerContainer: number
+  unitUOM: UOM
+  unitQuantity: string
+  altUOM?: any
+  organizationId: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
+}
 
 interface ProductPageContentProps {
-  product: Products
+  product: SerializedProduct
 }
 
 export const ProductPageContent = ({ product }: ProductPageContentProps) => {
@@ -46,21 +68,15 @@ export const ProductPageContent = ({ product }: ProductPageContentProps) => {
 
   // Format price
   const formattedPrice = useMemo(() => {
-    return product.price ? `$${product.price}` : "No price set"
+    return product.price ? `${product.price}` : "No price set"
   }, [product.price])
 
   return (
     <div className="space-y-6">
       {/* Product Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* <div> */}
-        {/* <h1 className="text-2xl font-bold">{product.name}</h1> */}
-        {/* <h1 className="text-2xl font-bold">
-            {product.sku ? `SKU: ${product.sku}` : "No SKU assigned"}
-          </h1> */}
-        {/* </div> */}
+      {/* <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <EditProductModal product={product} />
-      </div>
+      </div> */}
 
       <Tabs
         value={activeTab}
@@ -118,7 +134,6 @@ export const ProductPageContent = ({ product }: ProductPageContentProps) => {
 
           {/* Related Actions */}
           <div className="mt-8">
-            {/* <h1 className="text-xl mb-4">Related Actions</h1> */}
             <div className="flex flex-wrap gap-4">
               <Link href="/dashboard/add-inventory">
                 <Button variant="outline" className="flex items-center gap-2">
@@ -142,44 +157,198 @@ export const ProductPageContent = ({ product }: ProductPageContentProps) => {
             <Heading className="text-xl mb-4">Product Details</Heading>
 
             <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500">
-                  Description
-                </h3>
-                <p className="mt-1 text-gray-700">
-                  {"No description provided"}
-                </p>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500">SKU</h3>
-                  <p className="mt-1 flex items-center gap-2 text-gray-700">
-                    <Tag className="size-4 text-gray-400" />
-                    {product.sku || "No SKU assigned"}
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500">Price</h3>
-                  <p className="mt-1 flex items-center gap-2 text-gray-700">
-                    <DollarSign className="size-4 text-gray-400" />
-                    {formattedPrice}
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500">ID</h3>
-                  <p className="mt-1 font-mono text-sm text-gray-600">
-                    {product.id}
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-500">
-                    Date Added
+                {/* Basic Information Section */}
+                <div className="col-span-1 md:col-span-2">
+                  <h3 className="text-md font-semibold text-gray-700 mb-4 border-b pb-2">
+                    Basic Information
                   </h3>
-                  <p className="mt-1 text-gray-700">{formattedCreatedDate}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Product Name
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {product.name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Item Code
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {product.itemCode || "No Item Code"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Price
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        <DollarSign className="size-4 text-gray-400" />
+                        {formattedPrice}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Package Cost
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        <DollarSign className="size-4 text-gray-400" />
+                        {product.packageCost}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        SKU
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        <Tag className="size-4 text-gray-400" />
+                        {product.sku || "No SKU assigned"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Product Type
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {(() => {
+                          switch (product.type) {
+                            case "MEDICATION":
+                              return "Medication"
+                            case "IMMUNIZATION":
+                              return "Immunization"
+                            case "GENERAL":
+                              return "General"
+                            case "CUSTOM":
+                              return "Custom"
+                            default:
+                              return product.type
+                          }
+                        })()}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Manufacturer Barcode
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {product.manufacturerBarcodeNumber ||
+                          "No barcode assigned"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Packaging Information Section */}
+                <div className="col-span-1 md:col-span-2">
+                  <h3 className="text-md font-semibold text-gray-700 mb-4 border-b pb-2">
+                    Packaging Information
+                  </h3>
+                  <div className="grid grid-cols-3 gap-6 items-center">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Package UOM
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {getUOMLabel(product.packageUOM)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Container Quantity
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {product.quantityPerContainer || "0"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Container UOM
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {getUOMLabel(product.containerUOM)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Unit Information Section */}
+                <div className="col-span-1 md:col-span-2">
+                  <h3 className="text-md font-semibold text-gray-700 mb-4 border-b pb-2">
+                    Unit Information
+                  </h3>
+                  <div className="flex flex-wrap gap-6 items-center">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Quantity per Unit
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {product.unitQuantity}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Unit UOM
+                      </h3>
+                      <p className="mt-1 flex items-center gap-2 text-gray-700">
+                        {getUOMLabel(product.unitUOM)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Information Section */}
+                <div className="col-span-1 md:col-span-2">
+                  <h3 className="text-md font-semibold text-gray-700 mb-4 border-b pb-2">
+                    System Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        ID
+                      </h3>
+                      <p className="mt-1 font-mono text-sm text-gray-600">
+                        {product.id}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Date Added
+                      </h3>
+                      <p className="mt-1 text-gray-700">
+                        {formattedCreatedDate}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Last Updated
+                      </h3>
+                      <p className="mt-1 text-gray-700">
+                        {formattedUpdatedDate}
+                      </p>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-500">
+                        Organization ID
+                      </h3>
+                      <p className="mt-1 font-mono text-sm text-gray-600">
+                        {product.organizationId}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

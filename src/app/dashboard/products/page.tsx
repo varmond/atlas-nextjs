@@ -6,6 +6,7 @@ import { db } from "@/db"
 import { Button } from "@/components/ui/button"
 import { PlusIcon } from "lucide-react"
 import Link from "next/link"
+import { CreateProductModal } from "@/components/create-product-modal"
 
 const ProductsPage = async () => {
   const auth = await currentUser()
@@ -24,11 +25,13 @@ const ProductsPage = async () => {
     <DashboardPage
       title="Products"
       cta={
-        <Link href="/dashboard/add-inventory">
+        // <Link href="/dashboard/add-inventory">
+        <CreateProductModal>
           <Button className="w-full sm:w-fit">
             <PlusIcon className="size-4 mr-2" /> Add Product
           </Button>
-        </Link>
+        </CreateProductModal>
+        // </Link>
       }
     >
       <ProductsPageContent />
