@@ -44,7 +44,7 @@ export default async function ViewInventoryPage() {
   }))
 
   return (
-    <DashboardPage title="Inventory">
+    <DashboardPage title="Inventory" hideBackButton={true}>
       <ViewInventoryPageContent initialInventory={serializedInventory} />
     </DashboardPage>
   )

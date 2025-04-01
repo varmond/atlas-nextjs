@@ -142,4 +142,79 @@ export const inventoryRouter = router({
 
       return c.json({ inventory })
     }),
+  createBatchInventory: privateProcedure
+    .input(
+      z.object({
+        header: z.object({
+          vendor: z.string().min(1),
+          manufacturer: z.string().min(1),
+          receiptNumber: z.string().optional(),
+          notes: z.string().optional(),
+          packageCost: z.coerce.number().min(0),
+          receiptDate: z.string(),
+        }),
+        items: z.array(
+          z.object({
+            productId: z.string().min(1),
+            price: z.coerce.number().positive(),
+            lotNumber: z.string().min(1),
+            expirationDate: z.string(),
+            serialNumber: z.string().min(1),
+            unitsReceived: z.coerce.number().int().positive(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ c, input, ctx }) => {
+      try {
+        const { header, items } = input
+
+        // Create inventory header
+        const inventoryHeader = await db.inventoryHeader.create({
+          data: {
+            vendor: header.vendor,
+            manufacturer: header.manufacturer,
+            receiptNumber: header.receiptNumber || `R-${Date.now()}`,
+            notes: header.notes,
+            packageCost: header.packageCost,
+            receiptDate: new Date(header.receiptDate),
+            userId: ctx.user.id,
+            organizationId: ctx.user.organizationId ?? "",
+          },
+        })
+
+        // Create inventory items
+        const inventoryItems = await Promise.all(
+          items.map((item) =>
+            db.inventory.create({
+              data: {
+                price: item.price,
+                packageCost: header.packageCost, // Using the header's package cost
+                lotNumber: item.lotNumber,
+                expirationDate: new Date(item.expirationDate),
+                serialNumber: item.serialNumber,
+                vendor: header.vendor, // Using the header's vendor
+                manufacturer: header.manufacturer, // Using the header's manufacturer
+                unitsReceived: item.unitsReceived,
+                userId: ctx.user.id,
+                organizationId: ctx.user.organizationId ?? "",
+                headerId: inventoryHeader.id,
+                productId: item.productId,
+              },
+            })
+          )
+        )
+
+        return c.json({
+          success: true,
+          inventoryHeader,
+          itemsCount: inventoryItems.length,
+        })
+      } catch (error) {
+        console.error("Error creating batch inventory:", error)
+        throw new HTTPException(500, {
+          message: "Failed to create batch inventory",
+        })
+      }
+    }),
 })
