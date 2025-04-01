@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input" // Added Input component
 import { client } from "@/lib/client"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -12,8 +13,10 @@ import {
   getPaginationRowModel,
   SortingState,
   getSortedRowModel,
+  ColumnFiltersState, // Added for filtering
+  getFilteredRowModel, // Added for filtering
 } from "@tanstack/react-table"
-import { ArrowUpDown, Eye, Package } from "lucide-react"
+import { ArrowUpDown, Eye, Package, Search } from "lucide-react" // Added Search icon
 import Link from "next/link"
 import { useState } from "react"
 import {
@@ -28,8 +31,10 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { Products } from "@prisma/client"
 
 export const ProductsPageContent = () => {
-  // State for table sorting
+  // State for table sorting and filtering
   const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [searchQuery, setSearchQuery] = useState("")
 
   // Query to fetch products
   const { data, isPending: isProductsLoading } = useQuery({
@@ -40,6 +45,24 @@ export const ProductsPageContent = () => {
       return await res.json()
     },
   })
+
+  // Handle search input change
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setSearchQuery(value)
+
+    // Apply global filter across multiple columns
+    if (value) {
+      setColumnFilters([
+        {
+          id: "name",
+          value: value,
+        },
+      ])
+    } else {
+      setColumnFilters([])
+    }
+  }
 
   // Define table columns
   const columns: ColumnDef<Products>[] = [
@@ -81,6 +104,11 @@ export const ProductsPageContent = () => {
       cell: ({ row }) => <div>${row.getValue("price") || "0.00"}</div>,
     },
     {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => <div>{row.getValue("type")}</div>,
+    },
+    {
       accessorKey: "createdAt",
       header: ({ column }) => {
         return (
@@ -116,7 +144,14 @@ export const ProductsPageContent = () => {
     },
   ]
 
-  // Set up table with data
+  // Custom filter function to search across multiple fields
+  const fuzzyFilter = (row: any, columnId: string, filterValue: string) => {
+    const value = row.getValue(columnId)
+    if (!value) return false
+    return String(value).toLowerCase().includes(filterValue.toLowerCase())
+  }
+
+  // Set up table with data and filtering
   const table = useReactTable({
     data: data?.products || [],
     columns,
@@ -124,10 +159,28 @@ export const ProductsPageContent = () => {
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    filterFns: {
+      fuzzy: fuzzyFilter,
+    },
     state: {
       sorting,
+      columnFilters,
     },
   })
+
+  // Global filter function to search across multiple columns
+  const filterProducts = (products: Products[]) => {
+    if (!searchQuery) return products
+
+    return products.filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        String(product.type).toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }
 
   // Show loading state
   if (isProductsLoading) {
@@ -162,9 +215,25 @@ export const ProductsPageContent = () => {
     )
   }
 
-  // Render products table
+  // Render products table with search
   return (
     <div className="space-y-4">
+      {/* Search input */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Input
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={handleSearch}
+            className="pl-9"
+          />
+        </div>
+        {/* <Link href="/dashboard/add-inventory">
+          <Button>Add Product</Button>
+        </Link> */}
+      </div>
+
       <Card contentClassName="px-6 py-4">
         <Table>
           <TableHeader>
@@ -204,7 +273,9 @@ export const ProductsPageContent = () => {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No products found.
+                  {searchQuery
+                    ? "No products found matching your search."
+                    : "No products found."}
                 </TableCell>
               </TableRow>
             )}
@@ -212,23 +283,32 @@ export const ProductsPageContent = () => {
         </Table>
       </Card>
 
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant={"outline"}
-          size={"sm"}
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant={"outline"}
-          size={"sm"}
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
+      <div className="flex items-center justify-between py-4">
+        <div className="text-sm text-gray-500">
+          {table.getFilteredRowModel().rows.length} products found
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant={"outline"}
+            size={"sm"}
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <div className="text-sm px-2">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
+          <Button
+            variant={"outline"}
+            size={"sm"}
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
       </div>
     </div>
   )

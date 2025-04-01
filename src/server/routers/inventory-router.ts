@@ -77,7 +77,19 @@ export const inventoryRouter = router({
           throw new HTTPException(404, { message: "Product not found" })
         }
 
-        // Create inventory record
+        // Create inventory header first
+        const inventoryHeader = await db.inventoryHeader.create({
+          data: {
+            vendor,
+            manufacturer,
+            packageCost,
+            receiptNumber: `R-${Date.now()}`, // Generate a receipt number
+            userId: ctx.user.id,
+            organizationId: ctx.user.organizationId ?? "",
+          },
+        })
+
+        // Then create inventory item with reference to the header
         const inventory = await db.inventory.create({
           data: {
             productId,
@@ -91,10 +103,11 @@ export const inventoryRouter = router({
             unitsReceived,
             userId: ctx.user.id,
             organizationId: ctx.user.organizationId ?? "",
+            headerId: inventoryHeader.id,
           },
         })
 
-        return c.json({ success: true, inventory })
+        return c.json({ success: true, inventory, inventoryHeader })
       } catch (error) {
         console.error("Error creating inventory:", error)
         throw new HTTPException(500, {

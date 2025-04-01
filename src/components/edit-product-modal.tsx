@@ -374,7 +374,9 @@ export const EditProductModal = ({
                           <SelectValue placeholder="Select package UOM" />
                         </SelectTrigger>
                         <SelectContent>
-                          {UOM_OPTIONS.map((option) => (
+                          {UOM_OPTIONS.sort((a, b) =>
+                            a.label.localeCompare(b.label)
+                          ).map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -426,7 +428,9 @@ export const EditProductModal = ({
                           <SelectValue placeholder="Select container UOM" />
                         </SelectTrigger>
                         <SelectContent>
-                          {UOM_OPTIONS.map((option) => (
+                          {UOM_OPTIONS.sort((a, b) =>
+                            a.label.localeCompare(b.label)
+                          ).map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
@@ -480,7 +484,9 @@ export const EditProductModal = ({
                           <SelectValue placeholder="Select unit UOM" />
                         </SelectTrigger>
                         <SelectContent>
-                          {UOM_OPTIONS.map((option) => (
+                          {UOM_OPTIONS.sort((a, b) =>
+                            a.label.localeCompare(b.label)
+                          ).map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>
