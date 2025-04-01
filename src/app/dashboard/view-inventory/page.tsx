@@ -4,10 +4,10 @@ import { redirect } from "next/navigation"
 import { db } from "@/db"
 import { ViewInventoryPageContent } from "./view-inventory-page-content"
 
-export const metadata = {
-  title: "View Inventory | PeppersAtlas",
-  description: "View and manage your inventory items",
-}
+// export const metadata = {
+//   title: "View Inventory | PeppersAtlas",
+//   description: "View and manage your inventory items",
+// }
 
 export default async function ViewInventoryPage() {
   const auth = await currentUser()
