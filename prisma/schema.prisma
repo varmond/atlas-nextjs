@@ -100,7 +100,7 @@ model Quota {
 }
 
 model Products {
-  id                        String       @id @default(cuid())
+  id                        String      @id @default(cuid())
   itemCode                  String
   name                      String
   price                     Decimal
@@ -108,19 +108,44 @@ model Products {
   manufacturerBarcodeNumber String
   sku                       String
   type                      ProductType
-  packageUOM                String
-  containerUOM              String
-  quantityPerContainer      Int
-  unitUOM                   String
-  quantityPerUnit           Decimal
-  quantityPerUnitUOM        String       @default("EA")
-  userId                    String
-  organizationId            String
-  Organization              Organization @relation(fields: [organizationId], references: [id])
+
+  packageUOM           UOM     @default(BOX)
+  containerUOM         UOM     @default(VIAL)
+  quantityPerContainer Int     @default(1)
+  unitUOM              UOM     @default(ML)
+  unitQuantity         Decimal @default(1.0)
+
+  altUOM Json?
+
+  userId         String
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   User      User     @relation(fields: [userId], references: [id])
+}
+
+enum UOM {
+  BOX // Box(es)
+  VIAL // Vial(s)
+  CARTON // Carton(s)
+  UNIT // Unit(s)
+  ML // Milliliter(s)
+  MG // Milligram(s)
+  G // Gram(s)
+  KG // Kilogram(s)
+  L // Liter(s)
+  TABLET // Tablet(s)
+  CAPSULE // Capsule(s)
+  BOTTLE // Bottle(s)
+  PACK // Pack(s)
+  CASE // Case(s)
+  EA // Each
+  DOSE // Dose(s)
+  AMPULE // Ampule(s)
+  PREFILLED // Prefilled Syringe(s)
+  KIT // Kit(s)
 }
 
 enum ProductType {
