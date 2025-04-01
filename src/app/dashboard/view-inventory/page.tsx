@@ -1,14 +1,15 @@
-// src/app/dashboard/view-inventory/page.tsx
 import { DashboardPage } from "@/components/dashboard-page"
-import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
-import { InventoryPageContent } from "./view-inventory-page-content"
-import { Button } from "@/components/ui/button"
-import { PlusIcon } from "lucide-react"
-import Link from "next/link"
+import { db } from "@/db"
+import { ViewInventoryPageContent } from "./view-inventory-page-content"
 
-const Page = async () => {
+export const metadata = {
+  title: "View Inventory | PeppersAtlas",
+  description: "View and manage your inventory items",
+}
+
+export default async function ViewInventoryPage() {
   const auth = await currentUser()
 
   if (!auth) {
@@ -18,23 +19,33 @@ const Page = async () => {
   const user = await db.user.findUnique({ where: { externalId: auth.id } })
 
   if (!user) {
-    redirect("/welcome")
+    return redirect("/welcome")
   }
 
+  // Fetch inventory items for server rendering
+  const inventoryItems = await db.inventory.findMany({
+    where: { organizationId: user.organizationId ?? "" },
+    include: {
+      product: {
+        select: {
+          name: true,
+          sku: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  })
+
+  // Convert Decimal values to strings for serialization
+  const serializedInventory = inventoryItems.map((item) => ({
+    ...item,
+    price: item.price.toString(),
+    packageCost: item.packageCost.toString(),
+  }))
+
   return (
-    <DashboardPage
-      cta={
-        <Link href="/dashboard/add-inventory">
-          <Button className="w-full sm:w-fit">
-            <PlusIcon className="size-4 mr-2" /> Add Item
-          </Button>
-        </Link>
-      }
-      title="Inventory"
-    >
-      <InventoryPageContent />
+    <DashboardPage title="Inventory">
+      <ViewInventoryPageContent initialInventory={serializedInventory} />
     </DashboardPage>
   )
 }
-
-export default Page

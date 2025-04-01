@@ -19,7 +19,7 @@ const Page = async () => {
   }
 
   return (
-    <DashboardPage title="Add Inventory">
+    <DashboardPage title="Add Inventory" hideBackButton={true}>
       <AddInventoryPageContent />
     </DashboardPage>
   )

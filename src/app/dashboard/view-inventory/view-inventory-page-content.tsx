@@ -1,239 +1,317 @@
 "use client"
 
-import { LoadingSpinner } from "@/components/loading-spinner"
-import { Button, buttonVariants } from "@/components/ui/button"
-import { Modal } from "@/components/ui/modal"
-import { client } from "@/lib/client"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { format } from "date-fns"
-import { ArrowRight, BarChart2, Edit, Package, Trash2 } from "lucide-react"
-import Link from "next/link"
 import { useState } from "react"
-import { InventoryEmptyState } from "../inventory/inventory-empty-state"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { format } from "date-fns"
+import Link from "next/link"
+import {
+  ArrowUpDown,
+  Download,
+  Filter,
+  Plus,
+  Search,
+  Loader2,
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
+import { client } from "@/lib/client"
+import { useQuery } from "@tanstack/react-query"
 
-// Define the inventory item type based on how you'll structure your data
 interface InventoryItem {
   id: string
-  name: string
-  sku: string
-  category: string
-  quantity: number
-  price: number
-  createdAt: Date
-  updatedAt: Date
+  productId: string
+  price: number | string // Handle both number and string representations
+  packageCost: number | string
+  lotNumber: string
+  expirationDate: string | Date
+  serialNumber: string
+  vendor: string
+  manufacturer: string
+  unitsReceived: number
+  createdAt: string | Date
+  updatedAt: string | Date
+  product: {
+    name: string
+    sku: string
+  }
+  User?: {
+    name: string
+  }
 }
 
-export const InventoryPageContent = () => {
-  const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
-  const queryClient = useQueryClient()
+interface ViewInventoryPageContentProps {
+  initialInventory?: InventoryItem[]
+}
 
-  // This would be replaced with your actual query to fetch inventory items
-  const { data: inventoryItems, isPending: isInventoryItemsLoading } = useQuery(
-    {
-      queryKey: ["inventory-items"],
-      queryFn: async () => {
-        // Replace with actual API endpoint once implemented
-        // const res = await client.inventory.getInventoryItems.$get()
-        // const { items } = await res.json()
+export function ViewInventoryPageContent({
+  initialInventory = [],
+}: ViewInventoryPageContentProps) {
+  const [searchTerm, setSearchTerm] = useState("")
+  const { toast } = useToast()
 
-        // Mock data for now
-        const mockItems: InventoryItem[] = [
-          {
-            id: "1",
-            name: "T-Shirt - Black",
-            sku: "TS-BLK-001",
-            category: "Apparel",
-            quantity: 150,
-            price: 19.99,
-            createdAt: new Date(2025, 2, 10),
-            updatedAt: new Date(2025, 2, 10),
-          },
-          {
-            id: "2",
-            name: "Coffee Mug",
-            sku: "MUG-WHT-001",
-            category: "Accessories",
-            quantity: 75,
-            price: 12.99,
-            createdAt: new Date(2025, 2, 12),
-            updatedAt: new Date(2025, 2, 12),
-          },
-          {
-            id: "3",
-            name: "Wireless Mouse",
-            sku: "TECH-MOU-001",
-            category: "Electronics",
-            quantity: 35,
-            price: 29.99,
-            createdAt: new Date(2025, 2, 15),
-            updatedAt: new Date(2025, 2, 15),
-          },
-        ]
+  // Fetch inventory data
+  const { data, isLoading } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: async () => {
+      const response = await client.inventory.getInventory.$get()
+      const data = await response.json()
+      return data.inventoryItems
+    },
+    initialData: initialInventory,
+  })
 
-        return mockItems
-      },
-    }
+  // Filter inventory based on search term
+  const filteredInventory = data.filter(
+    (item: InventoryItem) =>
+      item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.vendor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const { mutate: deleteInventoryItem, isPending: isDeletingItem } =
-    useMutation({
-      mutationFn: async (id: string) => {
-        // Replace with actual API implementation once created
-        // await client.inventory.deleteInventoryItem.$post({ id })
-        console.log(`Deleting item with ID: ${id}`)
-        return { success: true }
-      },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["inventory-items"] })
-        setDeletingItemId(null)
-      },
-    })
-
-  if (isInventoryItemsLoading) {
-    return (
-      <div className="flex items-center justify-center h-full w-full">
-        <LoadingSpinner />
-      </div>
-    )
+  // Sort by function
+  const handleSort = (field: keyof InventoryItem) => {
+    // In a real implementation, we'd maintain state here
+    // and re-sort the data
+    console.log(`Sorting by ${field}`)
   }
 
-  if (!inventoryItems || inventoryItems.length === 0) {
-    return <InventoryEmptyState />
-  }
+  // Export to CSV
+  const exportToCsv = () => {
+    try {
+      // Convert inventory data to CSV format
+      const headers = [
+        "Product",
+        "SKU",
+        "Units",
+        "Price",
+        "Package Cost",
+        "Lot Number",
+        "Serial Number",
+        "Expiration Date",
+        "Vendor",
+        "Manufacturer",
+        "Received By",
+        "Received Date",
+      ]
 
-  // Group items by category for better organization
-  const itemsByCategory = inventoryItems.reduce<
-    Record<string, InventoryItem[]>
-  >((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = []
+      const csvData = filteredInventory.map((item: InventoryItem) => [
+        item.product.name,
+        item.product.sku,
+        item.unitsReceived,
+        typeof item.price === "number" ? item.price.toFixed(2) : item.price,
+        typeof item.packageCost === "number"
+          ? item.packageCost.toFixed(2)
+          : item.packageCost,
+        item.lotNumber,
+        item.serialNumber,
+        format(new Date(item.expirationDate), "yyyy-MM-dd"),
+        item.vendor,
+        item.manufacturer,
+        item.User?.name || "Unknown",
+        format(new Date(item.createdAt), "yyyy-MM-dd"),
+      ])
+
+      // Combine headers and data
+      const csvContent = [
+        headers.join(","),
+        ...csvData.map((row) => row.join(",")),
+      ].join("\n")
+
+      // Create and download CSV file
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.setAttribute("href", url)
+      link.setAttribute(
+        "download",
+        `inventory_export_${format(new Date(), "yyyy-MM-dd")}.csv`
+      )
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "Export successful",
+        description: "Your inventory data has been exported to CSV",
+      })
+    } catch (error) {
+      console.error("Error exporting to CSV:", error)
+      toast({
+        title: "Export failed",
+        description: "There was an error exporting your data",
+        variant: "destructive",
+      })
     }
-    acc[item.category].push(item)
-    return acc
-  }, {})
+  }
 
   return (
-    <>
-      <div className="space-y-6">
-        {Object.entries(itemsByCategory).map(([category, items]) => (
-          <div key={category} className="space-y-4">
-            <h2 className="text-xl font-medium text-gray-900">{category}</h2>
-            <ul className="grid max-w-6xl grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="relative group z-10 transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <div className="absolute z-0 inset-px rounded-lg bg-white" />
+    <Card className="p-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+        <div className="relative w-full sm:w-auto">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Input
+            placeholder="Search inventory..."
+            className="pl-9 w-full sm:w-[300px]"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
 
-                  <div className="pointer-events-none z-0 absolute inset-px rounded-lg shadow-sm transition-all duration-300 group-hover:shadow-md ring-1 ring-black/5" />
-                  <div className="relative p-6 z-10">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="size-12 bg-brand-100 rounded-full flex items-center justify-center">
-                        <Package className="size-6 text-brand-700" />
-                      </div>
+        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Filter className="mr-2 h-4 w-4" />
+                Sort
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleSort("product")}>
+                Sort by Product Name
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("expirationDate")}>
+                Sort by Expiration Date
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("createdAt")}>
+                Sort by Received Date
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSort("unitsReceived")}>
+                Sort by Quantity
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-                      <div>
-                        <h3 className="text-lg/7 font-medium tracking-tight text-gray-950">
-                          {item.name}
-                        </h3>
-                        <p className="text-sm/6 text-gray-600">
-                          SKU: {item.sku}
-                        </p>
-                      </div>
-                    </div>
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={exportToCsv}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
 
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <BarChart2 className="size-4 mr-2 text-brand-500" />
-                        <span className="font-medium">Quantity:</span>
-                        <span className="ml-1">{item.quantity}</span>
-                      </div>
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <span className="font-medium">Price:</span>
-                        <span className="ml-1">${item.price.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <span className="font-medium">Last updated:</span>
-                        <span className="ml-1">
-                          {format(item.updatedAt, "MMM d, yyyy")}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4">
-                      <Link
-                        href={`/dashboard/inventory/${item.id}`}
-                        className={buttonVariants({
-                          variant: "outline",
-                          size: "sm",
-                          className: "flex items-center gap-2 text-sm",
-                        })}
-                      >
-                        View details <ArrowRight className="size-4" />
-                      </Link>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-brand-600 transition-colors"
-                          aria-label={`Edit ${item.name}`}
-                        >
-                          <Link href={`/dashboard/inventory/${item.id}`}>
-                            <Edit className="size-5" />
-                          </Link>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-red-600 transition-colors"
-                          aria-label={`Delete ${item.name}`}
-                          onClick={() => setDeletingItemId(item.id)}
-                        >
-                          <Trash2 className="size-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+          <Button asChild className="w-full sm:w-auto">
+            <Link href="/dashboard/add-inventory">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Inventory
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Modal
-        showModal={!!deletingItemId}
-        setShowModal={() => setDeletingItemId(null)}
-        className="max-w-md p-8"
-      >
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-lg/7 font-medium tracking-tight text-gray-950">
-              Delete Item
-            </h2>
-            <p className="text-sm/6 text-gray-600">
-              Are you sure you want to delete this inventory item? This action
-              cannot be undone.
-            </p>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button variant="outline" onClick={() => setDeletingItemId(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() =>
-                deletingItemId && deleteInventoryItem(deletingItemId)
-              }
-              disabled={isDeletingItem}
-            >
-              {isDeletingItem ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <div
+                  className="flex items-center cursor-pointer"
+                  onClick={() => handleSort("product")}
+                >
+                  Product
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead>Lot #</TableHead>
+              <TableHead>Serial #</TableHead>
+              <TableHead>
+                <div
+                  className="flex items-center cursor-pointer"
+                  onClick={() => handleSort("expirationDate")}
+                >
+                  Expiration
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div
+                  className="flex items-center cursor-pointer"
+                  onClick={() => handleSort("unitsReceived")}
+                >
+                  Units
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div
+                  className="flex items-center cursor-pointer"
+                  onClick={() => handleSort("price")}
+                >
+                  Unit Price
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </div>
+              </TableHead>
+              <TableHead>Vendor</TableHead>
+              <TableHead>Date Received</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center">
+                  <div className="flex justify-center items-center">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    Loading inventory...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : filteredInventory.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="h-24 text-center">
+                  No inventory items found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredInventory.map((item: InventoryItem) => (
+                <TableRow key={item.id}>
+                  <TableCell className="font-medium">
+                    <div>
+                      <div>{item.product.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {item.product.sku}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{item.lotNumber}</TableCell>
+                  <TableCell>{item.serialNumber}</TableCell>
+                  <TableCell>
+                    {format(new Date(item.expirationDate), "MMM d, yyyy")}
+                  </TableCell>
+                  <TableCell>{item.unitsReceived}</TableCell>
+                  <TableCell>
+                    $
+                    {typeof item.price === "number"
+                      ? item.price.toFixed(2)
+                      : parseFloat(item.price as string).toFixed(2)}
+                  </TableCell>
+                  <TableCell>{item.vendor}</TableCell>
+                  <TableCell>
+                    {format(new Date(item.createdAt), "MMM d, yyyy")}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </Card>
   )
 }

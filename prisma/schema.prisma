@@ -30,12 +30,14 @@ model User {
   updatedAt      DateTime @updatedAt
   organizationId String?
 
-  EventCategoies EventCategory[]
-  events         Event[]
-  Quota          Quota[]
+  EventCategoies  EventCategory[]
+  events          Event[]
+  Quota           Quota[]
   // Products       Products[]
-  Organization   Organization?   @relation(fields: [organizationId], references: [id])
-  Products       Products[]
+  Organization    Organization?     @relation(fields: [organizationId], references: [id])
+  Products        Products[]
+  Invnetory       Inventory[]
+  InventoryHeader InventoryHeader[]
 
   @@index([email, apiKey])
 }
@@ -121,9 +123,10 @@ model Products {
   organizationId String
   Organization   Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  User      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  User      User        @relation(fields: [userId], references: [id])
+  Invnetory Inventory[]
 }
 
 enum UOM {
@@ -155,6 +158,53 @@ enum ProductType {
   CUSTOM
 }
 
+model Inventory {
+  id             String   @id @default(cuid())
+  product        Products @relation(fields: [productId], references: [id])
+  productId      String
+  price          Decimal
+  packageCost    Decimal
+  lotNumber      String
+  expirationDate DateTime
+  serialNumber   String
+  vendor         String
+  manufacturer   String
+  unitsReceived  Int
+
+  InventoryHeader InventoryHeader @relation(fields: [headerId], references: [id], onDelete: Cascade)
+  headerId        String
+
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id])
+  userId    String
+}
+
+model InventoryHeader {
+  id            String   @id @default(cuid())
+  receiptNumber String?
+  receiptDate   DateTime @default(now())
+  vendor        String
+  manufacturer  String?
+  notes         String?
+  packageCost   Decimal  @default(0)
+
+  // Receipt details
+  items Inventory[]
+
+  // Relations
+  organizationId String
+  Organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  User           User         @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Organization {
   id   String @id @default(cuid())
   name String
@@ -164,4 +214,7 @@ model Organization {
 
   users    User[]
   Products Products[]
+
+  Invnetory       Inventory[]
+  InventoryHeader InventoryHeader[]
 }

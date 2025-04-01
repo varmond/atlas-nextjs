@@ -2,6 +2,7 @@
 
 import { buttonVariants } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
+import { Toaster } from "@/components/ui/toaster"
 import { cn } from "@/utils"
 import { UserButton } from "@clerk/nextjs"
 import {
@@ -159,6 +160,7 @@ const Layout = ({ children }: PropsWithChildren) => {
             <div className="h-full flex flex-col flex-1 space-y-4">
               {children}
             </div>
+            <Toaster />
           </div>
         </div>
 

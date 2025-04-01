@@ -305,7 +305,7 @@ export const CreateProductModal = ({
 
           <div className="border-t pt-4 mt-4">
             <h3 className="text-md font-medium mb-3">Packaging Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-wrap gap-4 items-center">
               <div>
                 <Label htmlFor="packageUOM">Package UOM</Label>
                 <Controller
@@ -332,6 +332,26 @@ export const CreateProductModal = ({
                 {errors.packageUOM && (
                   <p className="text-sm text-red-500 mt-1">
                     {errors.packageUOM.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="quantityPerContainer">Container Quantity</Label>
+                <Input
+                  id="quantityPerContainer"
+                  type="number"
+                  step="1"
+                  {...register("quantityPerContainer", {
+                    required: "Quantity per container is required",
+                    valueAsNumber: true,
+                  })}
+                  placeholder="0"
+                  className="mt-1"
+                />
+                {errors.quantityPerContainer && (
+                  <p className="text-sm text-red-500 mt-1">
+                    {errors.quantityPerContainer.message}
                   </p>
                 )}
               </div>
@@ -365,31 +385,31 @@ export const CreateProductModal = ({
                   </p>
                 )}
               </div>
-
-              <div>
-                <Label htmlFor="quantityPerContainer">
-                  Quantity per Container
-                </Label>
-                <Input
-                  id="quantityPerContainer"
-                  type="number"
-                  step="1"
-                  {...register("quantityPerContainer")}
-                  placeholder="0"
-                  className="mt-1"
-                />
-                {errors.quantityPerContainer && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors.quantityPerContainer.message}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
           <div className="border-t pt-4 mt-4">
             <h3 className="text-md font-medium mb-3">Unit Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="unitQuantity">Unit Quantity</Label>
+                <Input
+                  id="unitQuantity"
+                  type="number"
+                  step="0.01"
+                  {...register("unitQuantity", {
+                    required: "Unit quantity is required",
+                  })}
+                  placeholder="0.00"
+                  className="mt-1"
+                />
+                {errors.unitQuantity && (
+                  <p className="text-sm text-red-500 mt-1">
+                    {errors.unitQuantity.message}
+                  </p>
+                )}
+              </div>
+
               <div>
                 <Label htmlFor="unitUOM">Unit UOM</Label>
                 <Controller
@@ -416,23 +436,6 @@ export const CreateProductModal = ({
                 {errors.unitUOM && (
                   <p className="text-sm text-red-500 mt-1">
                     {errors.unitUOM.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="unitQuantity">Unit Quantity</Label>
-                <Input
-                  id="unitQuantity"
-                  type="number"
-                  step="0.01"
-                  {...register("unitQuantity")}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-                {errors.unitQuantity && (
-                  <p className="text-sm text-red-500 mt-1">
-                    {errors.unitQuantity.message}
                   </p>
                 )}
               </div>

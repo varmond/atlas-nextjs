@@ -60,13 +60,7 @@ type Product = {
   sku: string
 }
 
-interface AddInventoryPageContentProps {
-  initialProducts?: Product[]
-}
-
-export function AddInventoryPageContent({
-  initialProducts = [],
-}: AddInventoryPageContentProps) {
+export function AddInventoryForm() {
   const { toast } = useToast()
   const router = useRouter()
 
@@ -78,7 +72,6 @@ export function AddInventoryPageContent({
       const data = await response.json()
       return data.products
     },
-    initialData: initialProducts,
   })
 
   // Create form
@@ -136,7 +129,14 @@ export function AddInventoryPageContent({
   }
 
   return (
-    <Card className="max-w-4xl mx-auto w-full p-6">
+    <Card className="p-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold">Add New Inventory</h2>
+        <p className="text-sm text-gray-500">
+          Enter details to receive new inventory items
+        </p>
+      </div>
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
