@@ -72,17 +72,11 @@ const productSchema = z.object({
   type: z.nativeEnum(ProductType),
   packageUOM: z.nativeEnum(UOM),
   containerUOM: z.nativeEnum(UOM),
-  quantityPerContainer: z
-    .string()
-    .refine((val) => !isNaN(parseInt(val)) && parseInt(val) >= 1, {
-      message: "Quantity per container must be at least 1.",
-    }),
+  quantityPerContainer: z.number(),
   unitUOM: z.nativeEnum(UOM),
-  unitQuantity: z
-    .string()
-    .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, {
-      message: "Unit quantity must be a positive number.",
-    }),
+  unitQuantity: z.coerce
+    .number()
+    .min(0.01, "Unit quantity must be greater than 0"),
 })
 
 type ProductFormValues = z.infer<typeof productSchema>
@@ -116,9 +110,9 @@ export const CreateProductModal = ({
       type: ProductType.GENERAL,
       packageUOM: UOM.BOX,
       containerUOM: UOM.VIAL,
-      quantityPerContainer: "1",
+      quantityPerContainer: 1,
       unitUOM: UOM.ML,
-      unitQuantity: "1",
+      unitQuantity: 1,
     },
   })
 
@@ -134,9 +128,9 @@ export const CreateProductModal = ({
         type: values.type,
         packageUOM: values.packageUOM,
         containerUOM: values.containerUOM,
-        quantityPerContainer: parseInt(values.quantityPerContainer),
+        quantityPerContainer: values.quantityPerContainer,
         unitUOM: values.unitUOM,
-        unitQuantity: parseFloat(values.unitQuantity),
+        unitQuantity: values.unitQuantity,
       })
 
       return response.json()
@@ -402,9 +396,9 @@ export const CreateProductModal = ({
                   type="number"
                   step="0.01"
                   {...register("unitQuantity", {
-                    required: "Unit quantity is required",
+                    valueAsNumber: true,
                   })}
-                  placeholder="0.00"
+                  placeholder="0"
                   className="mt-1"
                 />
                 {errors.unitQuantity && (

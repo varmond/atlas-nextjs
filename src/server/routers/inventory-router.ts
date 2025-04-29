@@ -146,12 +146,12 @@ export const inventoryRouter = router({
     .input(
       z.object({
         header: z.object({
-          vendor: z.string().min(1),
-          manufacturer: z.string().min(1),
-          receiptNumber: z.string().optional(),
-          notes: z.string().optional(),
+          vendor: z.string().optional(),
+          manufacturer: z.string().optional(),
           packageCost: z.coerce.number().min(0),
           receiptDate: z.string(),
+          receiptNumber: z.string().optional(),
+          notes: z.string().optional(),
         }),
         items: z.array(
           z.object({
@@ -172,8 +172,8 @@ export const inventoryRouter = router({
         // Create inventory header
         const inventoryHeader = await db.inventoryHeader.create({
           data: {
-            vendor: header.vendor,
-            manufacturer: header.manufacturer,
+            vendor: header.vendor ?? "",
+            manufacturer: header.manufacturer ?? "",
             receiptNumber: header.receiptNumber || `R-${Date.now()}`,
             notes: header.notes,
             packageCost: header.packageCost,
@@ -193,8 +193,8 @@ export const inventoryRouter = router({
                 lotNumber: item.lotNumber,
                 expirationDate: new Date(item.expirationDate),
                 serialNumber: item.serialNumber,
-                vendor: header.vendor, // Using the header's vendor
-                manufacturer: header.manufacturer, // Using the header's manufacturer
+                vendor: header.vendor ?? "", // Using the header's vendor
+                manufacturer: header.manufacturer ?? "", // Using the header's manufacturer
                 unitsReceived: item.unitsReceived,
                 userId: ctx.user.id,
                 organizationId: ctx.user.organizationId ?? "",

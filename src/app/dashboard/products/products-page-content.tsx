@@ -129,7 +129,9 @@ export const ProductsPageContent = () => {
       id: "actions",
       cell: ({ row }) => {
         return (
-          <Link href={`/dashboard/products/${row.original.id}`}>
+          <Link
+            href={`/dashboard/products/${encodeURIComponent(row.original.id)}`}
+          >
             <Button
               variant="ghost"
               size="sm"
