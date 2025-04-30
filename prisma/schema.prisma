@@ -36,6 +36,11 @@ enum OrganizationPlan {
   ENTERPRISE
 }
 
+enum InvoiceStatus {
+  DRAFT
+  POSTED
+}
+
 model User {
   id         String  @id @default(cuid())
   externalId String? @unique
@@ -43,14 +48,14 @@ model User {
   quotaLimit Int
   plan       Plan @default(FREE)
 
-  email          String   @unique
-  apiKey         String   @unique @default(cuid())
+  email          String           @unique
+  apiKey         String           @unique @default(cuid())
   discordId      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  role          OrganizationRole @default(MEMBER)
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  role           OrganizationRole @default(MEMBER)
 
   EventCategoies  EventCategory[]
   events          Event[]
@@ -60,6 +65,8 @@ model User {
   Inventory       Inventory[]
   InventoryHeader InventoryHeader[]
   Location        Location[]
+  Invoice         Invoice[]
+  purchaseOrders  PurchaseOrder[]
 
   @@index([email, apiKey])
   @@index([organizationId])
@@ -146,10 +153,12 @@ model Products {
   organizationId String
   Organization   Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  User      User        @relation(fields: [userId], references: [id])
-  Invnetory Inventory[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  User        User          @relation(fields: [userId], references: [id])
+  Invnetory   Inventory[]
+  InvoiceItem InvoiceItem[]
+  purchaseOrderItems PurchaseOrderItem[]
 }
 
 enum UOM {
@@ -200,12 +209,13 @@ model Inventory {
   organizationId String
   Organization   Organization @relation(fields: [organizationId], references: [id])
 
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  User       User      @relation(fields: [userId], references: [id])
-  userId     String
-  Location   Location? @relation(fields: [locationId], references: [id])
-  locationId String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  User        User          @relation(fields: [userId], references: [id])
+  userId      String
+  Location    Location?     @relation(fields: [locationId], references: [id])
+  locationId  String?
+  InvoiceItem InvoiceItem[]
 }
 
 model InventoryHeader {
@@ -251,8 +261,10 @@ model Location {
   // Headers can also reference a default location
   inventoryHeaders InventoryHeader[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Invoice   Invoice[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([name, organizationId])
 }
@@ -260,10 +272,10 @@ model Location {
 model Organization {
   id   String @id @default(cuid())
   name String
-  
+
   subscriptionStatus SubscriptionStatus @default(ACTIVE)
-  planType          OrganizationPlan    @default(FREE)
-  
+  planType           OrganizationPlan   @default(FREE)
+
   settings Json?
 
   createdAt DateTime @default(now())
@@ -275,6 +287,136 @@ model Organization {
   Inventory       Inventory[]
   InventoryHeader InventoryHeader[]
   Location        Location[]
+  Invoice         Invoice[]
+  Patient         Patient[]
+  purchaseOrders  PurchaseOrder[]
+  vendors         Vendor[]
 
   @@index([id])
+}
+
+model Patient {
+  id        String  @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  Invoice   Invoice[]
+
+  @@index([organizationId])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  invoiceNumber  Int          @default(1000)  // Default for new records
+  patientId      String
+  locationId     String
+  organizationId String
+  userId         String
+  status         InvoiceStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  items        InvoiceItem[]
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  location     Location      @relation(fields: [locationId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([locationId])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  productId   String
+  inventoryId String
+  quantity    Int
+  price       Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  invoice   Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product   Products  @relation(fields: [productId], references: [id])
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@index([inventoryId])
+}
+
+model PurchaseOrder {
+  id             String        @id @default(cuid())
+  orderNumber    Int          @default(1000)
+  vendorId       String
+  locationId     String
+  organizationId String
+  userId         String
+  status         PurchaseOrderStatus @default(DRAFT)
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  items        PurchaseOrderItem[]
+  vendor       Vendor        @relation(fields: [vendorId], references: [id])
+  location     Location      @relation(fields: [locationId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([vendorId])
+  @@index([locationId])
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  quantity        Int
+  price           Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product      Products     @relation(fields: [productId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([productId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  POSTED
+  RECEIVED
+  CANCELLED
+}
+
+model Vendor {
+  id            String   @id @default(cuid())
+  name          String
+  email         String?
+  phone         String?
+  address       String?
+  organizationId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  purchaseOrders PurchaseOrder[]
+
+  @@index([organizationId])
 }

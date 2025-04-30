@@ -18,22 +18,33 @@ const inventoryCreateSchema = z.object({
 })
 
 export const inventoryRouter = router({
-  getInventory: privateProcedure.query(async ({ c, ctx }) => {
-    const inventoryItems = await db.inventory.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
-      include: {
-        product: {
-          select: {
-            name: true,
-            sku: true,
+  getInventory: privateProcedure
+    .input(z.object({
+      productId: z.string().optional(),
+      locationId: z.string().optional(),
+    }))
+    .query(async ({ c, ctx, input }) => {
+      const inventoryItems = await db.inventory.findMany({
+        where: {
+          organizationId: ctx.user.organizationId ?? "",
+          productId: input.productId,
+          locationId: input.locationId,
+          unitsReceived: {
+            gt: 0
+          }
+        },
+        include: {
+          product: {
+            select: {
+              name: true,
+              sku: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    })
-
-    return c.json({ inventoryItems })
-  }),
+        orderBy: { createdAt: "desc" },
+      })
+      return c.json({ inventoryItems })
+    }),
 
   getProducts: privateProcedure.query(async ({ c, ctx }) => {
     const products = await db.products.findMany({
@@ -142,6 +153,20 @@ export const inventoryRouter = router({
 
       return c.json({ inventory })
     }),
+
+  getLocations: privateProcedure.query(async ({ c, ctx }) => {
+    const locations = await db.locations.findMany({
+      where: { organizationId: ctx.user.organizationId ?? "" },
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: { name: "asc" },
+    })
+
+    return c.json({ locations })
+  }),
+
   createBatchInventory: privateProcedure
     .input(
       z.object({
@@ -152,6 +177,7 @@ export const inventoryRouter = router({
           receiptDate: z.string(),
           receiptNumber: z.string().optional(),
           notes: z.string().optional(),
+          locationId: z.string().min(1),
         }),
         items: z.array(
           z.object({
@@ -180,6 +206,7 @@ export const inventoryRouter = router({
             receiptDate: new Date(header.receiptDate),
             userId: ctx.user.id,
             organizationId: ctx.user.organizationId ?? "",
+            locationId: header.locationId,
           },
         })
 
@@ -200,6 +227,7 @@ export const inventoryRouter = router({
                 organizationId: ctx.user.organizationId ?? "",
                 headerId: inventoryHeader.id,
                 productId: item.productId,
+                locationId: header.locationId,
               },
             })
           )

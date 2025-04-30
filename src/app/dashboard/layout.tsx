@@ -17,10 +17,10 @@ import {
   Table,
   ListOrdered,
   Package,
+  DollarSign,
 } from "lucide-react"
 import Link from "next/link"
 import { PropsWithChildren, useState } from "react"
-import { Drawer } from "vaul"
 
 interface SidebarItem {
   href: string
@@ -62,17 +62,31 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
         icon: ListOrdered,
         text: "View Inventory",
       },
-      // {
-      //   href: "/dashboard/inventory",
-      //   icon: Package,
-      //   text: "Manage Inventory",
-      // },
     ],
   },
   {
     category: "Products",
     items: [
       { href: "/dashboard/products", icon: Table, text: "View Products" },
+    ],
+  },
+  // {
+  //   category: "Reports",
+  //   items: [
+  //     { href: "/dashboard/reports", icon: Table, text: "View Reports" },
+  //   ],
+  // },
+  {
+    category: "Invoices",
+    items: [
+      { href: "/dashboard/invoices/create-invoice", icon: Plus, text: "Create Invoice" },
+      { href: "/dashboard/invoices/view-invoices", icon: Table, text: "View Invoices" },
+    ],
+  },
+  {
+    category: "Purchasing",
+    items: [
+      { href: "/dashboard/purchasing/view-purchase-orders", icon: DollarSign, text: "Purchase Orders" },
     ],
   },
 ]
