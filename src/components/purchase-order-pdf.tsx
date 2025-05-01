@@ -151,12 +151,12 @@ export function PurchaseOrderPDF({ purchaseOrder, organizationName }: PurchaseOr
           })}
         </View>
 
-        <View style={styles.totals}>
+        {/* <View style={styles.totals}>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>${String(total)}</Text>
           </View>
-        </View>
+        </View> */}
 
         {/* {purchaseOrder.notes && (
           <View style={[styles.section, { marginTop: 40 }]}>

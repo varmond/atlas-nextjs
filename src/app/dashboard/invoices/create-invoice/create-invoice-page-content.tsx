@@ -91,7 +91,7 @@ export function CreateInvoicePageContent({ user }: CreateInvoicePageContentProps
         title: "Invoice Created",
         description: "New invoice has been created successfully",
       })
-      router.push(`/dashboard/invoices/${data.invoice.id}`)
+      router.push(`/dashboard/invoices/view-invoices/${data.invoice.id}`)
     },
     onError: (error) => {
       toast({

@@ -154,12 +154,11 @@ export function AddInventoryPageContent({
   })
 
   // Fetch products for dropdown
-  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
+  const { data: productsData = [], isLoading: isLoadingProducts } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
-      const response = await client.inventory.getProducts.$get()
-      const data = await response.json()
-      return data.products
+      const response = await client.product.getProducts.$get()
+      return response.products
     },
     initialData: initialProducts,
   })
