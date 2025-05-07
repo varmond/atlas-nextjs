@@ -67,6 +67,8 @@ model User {
   Location        Location[]
   Invoice         Invoice[]
   purchaseOrders  PurchaseOrder[]
+  inventoryTransfers InventoryTransfer[]
+  dispenses      InventoryDispense[]
 
   @@index([email, apiKey])
   @@index([organizationId])
@@ -216,6 +218,10 @@ model Inventory {
   Location    Location?     @relation(fields: [locationId], references: [id])
   locationId  String?
   InvoiceItem InvoiceItem[]
+  subLocation      SubLocation? @relation(fields: [subLocationId], references: [id])
+  subLocationId    String?
+  transfers        InventoryTransfer[]
+  dispenses       InventoryDispense[]
 }
 
 model InventoryHeader {
@@ -266,6 +272,10 @@ model Location {
   Invoice   Invoice[]
   purchaseOrders PurchaseOrder[]
 
+  subLocations     SubLocation[]
+  sourceTransfers  InventoryTransfer[] @relation("SourceLocation")
+  destTransfers    InventoryTransfer[] @relation("DestLocation")
+
   @@unique([name, organizationId])
 }
 
@@ -291,6 +301,9 @@ model Organization {
   Patient         Patient[]
   purchaseOrders  PurchaseOrder[]
   vendors         Vendor[]
+  subLocations    SubLocation[]
+  inventoryTransfers InventoryTransfer[]
+  dispenses      InventoryDispense[]
 
   @@index([id])
 }
@@ -419,4 +432,65 @@ model Vendor {
   purchaseOrders PurchaseOrder[]
 
   @@index([organizationId])
+}
+
+model SubLocation {
+  id            String    @id @default(uuid())
+  name          String
+  code          String
+  location      Location  @relation(fields: [locationId], references: [id])
+  locationId    String
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  inventory     Inventory[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sourceTransfers InventoryTransfer[] @relation("SourceSubLocation")
+  destTransfers   InventoryTransfer[] @relation("DestSubLocation")
+
+  @@unique([code, locationId])
+}
+
+model InventoryTransfer {
+  id                 String    @id @default(uuid())
+  quantity          Int
+  sourceLocation    Location  @relation("SourceLocation", fields: [sourceLocationId], references: [id])
+  sourceLocationId  String
+  sourceSubLocation SubLocation? @relation("SourceSubLocation", fields: [sourceSubLocationId], references: [id])
+  sourceSubLocationId String?
+  destLocation      Location  @relation("DestLocation", fields: [destLocationId], references: [id])
+  destLocationId    String
+  destSubLocation   SubLocation? @relation("DestSubLocation", fields: [destSubLocationId], references: [id])
+  destSubLocationId String?
+  inventory         Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId       String
+  notes             String?
+  user              User      @relation(fields: [userId], references: [id])
+  userId            String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  createdAt         DateTime  @default(now())
+}
+
+model InventoryDispense {
+  id            String    @id @default(uuid())
+  quantity      Int
+  note          String?
+  dispensedAt   DateTime  @default(now())
+  
+  inventory     Inventory @relation(fields: [inventoryId], references: [id])
+  inventoryId   String
+  
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String
+  
+  organization  Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([inventoryId])
+  @@index([userId])
 }

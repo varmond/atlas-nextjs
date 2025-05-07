@@ -59,6 +59,7 @@ const headerFormSchema = z.object({
     required_error: "Receipt date is required",
   }),
   locationId: z.string().min(1, "Location is required"),
+  subLocationId: z.string().optional(),
 })
 
 // Schema validation for inventory items
@@ -169,16 +170,28 @@ export function AddInventoryPageContent({
     queryKey: ["locations"],
     queryFn: async () => {
       const response = await client.location.getLocations.$get()
-      const data = await response.json()
-      return data.locations
+      return response.json()
     },
-    initialData: initialLocations,
+    initialData: { locations: initialLocations }
+  })
+
+  // Add sub-locations query
+  const { data: subLocationsData } = useQuery({
+    queryKey: ["subLocations", headerForm.watch("locationId")],
+    queryFn: async () => {
+      if (!headerForm.watch("locationId")) return { subLocations: [] }
+      const response = await client["sub-location"].getSubLocations.$get({
+        locationId: headerForm.watch("locationId")
+      })
+      return response.json()
+    },
+    enabled: !!headerForm.watch("locationId")
   })
 
   // Update the default location after locations are loaded
   useEffect(() => {
-    if (locationsData?.length > 0 && !headerForm.getValues().locationId) {
-      headerForm.setValue('locationId', locationsData[0].id)
+    if (locationsData?.locations?.length > 0 && !headerForm.getValues().locationId) {
+      headerForm.setValue('locationId', locationsData.locations[0].id)
     }
   }, [locationsData, headerForm])
 
@@ -247,6 +260,7 @@ export function AddInventoryPageContent({
           receiptNumber: headerValues.receiptNumber || "",
           notes: headerValues.notes || "",
           locationId: headerValues.locationId,
+          subLocationId: headerValues.subLocationId,
         },
         items: batchItems.map(item => ({
           productId: item.productId,
@@ -527,9 +541,38 @@ export function AddInventoryPageContent({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {locationsData?.map((location: { id: string, name: string }) => (
+                        {locationsData?.locations?.map((location) => (
                           <SelectItem key={location.id} value={location.id}>
                             {location.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={headerForm.control}
+                name="subLocationId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sub-Location (Optional)</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      disabled={!headerForm.watch("locationId")}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a sub-location" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {subLocationsData?.subLocations?.map((subLocation) => (
+                          <SelectItem key={subLocation.id} value={subLocation.id}>
+                            {subLocation.name} ({subLocation.code})
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -245,4 +245,108 @@ export const inventoryRouter = router({
         })
       }
     }),
+
+  createTransfer: privateProcedure
+    .input(z.object({
+      inventoryId: z.string(),
+      quantity: z.number().int().positive(),
+      sourceLocationId: z.string(),
+      sourceSubLocationId: z.string().optional(),
+      destLocationId: z.string(),
+      destSubLocationId: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ c, input, ctx }) => {
+      try {
+        // Start transaction
+        return await db.$transaction(async (tx) => {
+          // Check if source has enough quantity
+          const sourceInventory = await tx.inventory.findFirst({
+            where: {
+              id: input.inventoryId,
+              locationId: input.sourceLocationId,
+              organizationId: ctx.user.organizationId ?? "",
+              ...(input.sourceSubLocationId && {
+                subLocationId: input.sourceSubLocationId
+              })
+            },
+          })
+
+          if (!sourceInventory || sourceInventory.unitsReceived < input.quantity) {
+            throw new HTTPException(400, { message: "Insufficient quantity available" })
+          }
+
+          // Create transfer record
+          const transfer = await tx.inventoryTransfer.create({
+            data: {
+              quantity: input.quantity,
+              sourceLocationId: input.sourceLocationId,
+              sourceSubLocationId: input.sourceSubLocationId,
+              destLocationId: input.destLocationId,
+              destSubLocationId: input.destSubLocationId,
+              inventoryId: input.inventoryId,
+              notes: input.notes,
+              userId: ctx.user.id,
+              organizationId: ctx.user.organizationId ?? "",
+            },
+          })
+
+          // Update source inventory
+          await tx.inventory.update({
+            where: { id: input.inventoryId },
+            data: {
+              unitsReceived: sourceInventory.unitsReceived - input.quantity,
+            },
+          })
+
+          // Create or update destination inventory
+          const destInventory = await tx.inventory.findFirst({
+            where: {
+              productId: sourceInventory.productId,
+              locationId: input.destLocationId,
+              organizationId: ctx.user.organizationId ?? "",
+              ...(input.destSubLocationId && {
+                subLocationId: input.destSubLocationId
+              })
+            },
+          })
+
+          if (destInventory) {
+            await tx.inventory.update({
+              where: { id: destInventory.id },
+              data: {
+                unitsReceived: destInventory.unitsReceived + input.quantity,
+              },
+            })
+          } else {
+            await tx.inventory.create({
+              data: {
+                productId: sourceInventory.productId,
+                price: sourceInventory.price,
+                packageCost: sourceInventory.packageCost,
+                lotNumber: sourceInventory.lotNumber,
+                expirationDate: sourceInventory.expirationDate,
+                serialNumber: sourceInventory.serialNumber,
+                vendor: sourceInventory.vendor,
+                manufacturer: sourceInventory.manufacturer,
+                unitsReceived: input.quantity,
+                locationId: input.destLocationId,
+                ...(input.destSubLocationId && {
+                  subLocationId: input.destSubLocationId
+                }),
+                organizationId: ctx.user.organizationId ?? "",
+                userId: ctx.user.id,
+                headerId: sourceInventory.headerId,
+              },
+            })
+          }
+
+          return c.json({ success: true, transfer })
+        })
+      } catch (error) {
+        console.error("Error creating transfer:", error)
+        if (error instanceof HTTPException) throw error
+        throw new HTTPException(500, { message: "Failed to create transfer" })
+      }
+    }),
 })

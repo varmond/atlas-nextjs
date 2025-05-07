@@ -18,6 +18,9 @@ import {
   ListOrdered,
   Package,
   DollarSign,
+  ArrowRightLeft,
+  MinusCircleIcon,
+  ClockIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { PropsWithChildren, useState } from "react"
@@ -62,12 +65,16 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
         icon: ListOrdered,
         text: "View Inventory",
       },
+      { href: "/dashboard/transfers", icon: ArrowRightLeft, text: "Transfers" },
+      { href: "/dashboard/dispense", icon: MinusCircleIcon, text: "Dispense" },
+      { href: "/dashboard/dispense/history", icon: ClockIcon, text: "Dispense History" },
     ],
   },
   {
-    category: "Products",
+    category: "Data",
     items: [
       { href: "/dashboard/products", icon: Table, text: "View Products" },
+      { href: "/dashboard/locations", icon: Table, text: "View Locations" }
     ],
   },
   // {
