@@ -155,7 +155,7 @@ export const inventoryRouter = router({
     }),
 
   getLocations: privateProcedure.query(async ({ c, ctx }) => {
-    const locations = await db.locations.findMany({
+    const locations = await db.location.findMany({
       where: { organizationId: ctx.user.organizationId ?? "" },
       select: {
         id: true,
