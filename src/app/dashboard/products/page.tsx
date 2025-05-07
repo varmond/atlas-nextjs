@@ -24,6 +24,7 @@ const ProductsPage = async () => {
   return (
     <DashboardPage
       title="Products"
+      hideBackButton={true}
       cta={
         // <Link href="/dashboard/add-inventory">
         <CreateProductModal>

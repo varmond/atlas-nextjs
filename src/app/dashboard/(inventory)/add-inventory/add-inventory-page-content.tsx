@@ -158,7 +158,8 @@ export function AddInventoryPageContent({
     queryKey: ["products"],
     queryFn: async () => {
       const response = await client.product.getProducts.$get()
-      return response.products
+      const data = await response.json()
+      return data.products
     },
     initialData: initialProducts,
   })

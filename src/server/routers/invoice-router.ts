@@ -252,5 +252,5 @@ export const invoiceRouter = router({
       })
 
       return c.json({ invoice })
-    }),
+     }),
 }) 

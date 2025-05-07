@@ -28,6 +28,7 @@ export default async function ViewInvoicesPage() {
   return (
     <DashboardPage 
       title="Invoices"
+      hideBackButton={true}
       cta={
         <Link href="/dashboard/invoices/create-invoice">
         <Button className="w-full sm:w-fit">

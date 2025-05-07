@@ -28,6 +28,7 @@ export default async function ViewPurchaseOrdersPage() {
   return (
     <DashboardPage 
       title="Purchase Orders"
+      hideBackButton={true}
       cta={
         <Button className="w-full sm:w-fit">
           <PlusIcon className="size-4 mr-2" />

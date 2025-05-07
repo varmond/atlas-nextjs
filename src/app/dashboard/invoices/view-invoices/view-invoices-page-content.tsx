@@ -80,7 +80,7 @@ export function ViewInvoicesPageContent({ user }: ViewInvoicesPageContentProps) 
               </TableCell>
               <TableCell>
                 ${invoice.items
-                  .reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
+                  .reduce((sum: number, item) => sum + Number(item.price) * item.quantity, 0)
                   .toFixed(2)}
               </TableCell>
               <TableCell>
