@@ -155,14 +155,14 @@ export function AddInventoryPageContent({
   })
 
   // Fetch products for dropdown
-  const { data: productsData = [], isLoading: isLoadingProducts } = useQuery({
+  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
     queryKey: ["products"],
     queryFn: async () => {
       const response = await client.product.getProducts.$get()
       const data = await response.json()
-      return data.products
+      return data
     },
-    initialData: initialProducts,
+    initialData: { products: initialProducts }
   })
 
   // Fetch locations for dropdown
@@ -214,7 +214,7 @@ export function AddInventoryPageContent({
     if (!valid) return
 
     const itemValues = itemForm.getValues()
-    const product = productsData?.find((p) => p.id === itemValues.productId)
+    const product = productsData?.products?.find((p: Product) => p.id === itemValues.productId)
 
     const newItem: BatchItem = {
       ...itemValues,
@@ -352,7 +352,7 @@ export function AddInventoryPageContent({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {productsData?.map((product: Product) => (
+                          {productsData?.products?.map((product: Product) => (
                             <SelectItem key={product.id} value={product.id}>
                               {product.name} - {product.sku}
                             </SelectItem>

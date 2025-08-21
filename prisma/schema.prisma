@@ -65,8 +65,20 @@ model User {
   discordId      String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id])
+  
+  // Super admin flag
+  isSuperAdmin   Boolean          @default(false)
+  
+  // Current active organization
+  currentOrganizationId String?
+  currentOrganization   Organization? @relation("CurrentOrganization", fields: [currentOrganizationId], references: [id])
+  
+  // Many-to-many relationship with organizations
+  userOrganizations UserOrganization[]
+  
+  // Legacy single organization relationship (for backward compatibility)
+  organizationId String?
+  organization   Organization? @relation("LegacyOrganization", fields: [organizationId], references: [id])
   role           OrganizationRole @default(MEMBER)
 
   EventCategoies  EventCategory[]
@@ -85,6 +97,7 @@ model User {
   membershipSubscriptions MembershipSubscription[]
 
   @@index([email, apiKey])
+  @@index([currentOrganizationId])
   @@index([organizationId])
 }
 
@@ -309,7 +322,15 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
+  // Many-to-many relationship with users
+  userOrganizations UserOrganization[]
+  
+  // Legacy single organization relationship (for backward compatibility)
+  users    User[] @relation("LegacyOrganization")
+  
+  // Current organization relationship
+  currentUsers User[] @relation("CurrentOrganization")
+  
   Products Products[]
 
   Inventory       Inventory[]
@@ -598,4 +619,21 @@ model BenefitUsageRecord {
 
   @@index([subscriptionId])
   @@index([benefitId])
+}
+
+// New model for many-to-many user-organization relationship
+model UserOrganization {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+  isActive       Boolean          @default(true)
+  joinedAt       DateTime         @default(now())
+  
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
 }

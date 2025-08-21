@@ -6,8 +6,15 @@ import { HTTPException } from "hono/http-exception"
 
 export const locationRouter = router({
   getLocations: privateProcedure.query(async ({ c, ctx }) => {
+    // Use legacy organizationId for now
+    const organizationId = ctx.user.organizationId
+    
+    if (!organizationId) {
+      throw new HTTPException(400, { message: "No organization context available" })
+    }
+
     const locations = await db.location.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
+      where: { organizationId },
       select: {
         id: true,
         name: true,
@@ -26,12 +33,19 @@ export const locationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        // Use legacy organizationId for now
+        const organizationId = ctx.user.organizationId
+        
+        if (!organizationId) {
+          throw new HTTPException(400, { message: "No organization context available" })
+        }
+
         const location = await db.location.create({
           data: {
             name: input.name,
             description: input.description,
             isActive: true,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
             userId: ctx.user.id,
           },
         })
@@ -51,10 +65,17 @@ export const locationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        // Use legacy organizationId for now
+        const organizationId = ctx.user.organizationId
+        
+        if (!organizationId) {
+          throw new HTTPException(400, { message: "No organization context available" })
+        }
+
         const location = await db.location.update({
           where: {
             id: input.id,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
           },
           data: {
             name: input.name,
@@ -74,10 +95,17 @@ export const locationRouter = router({
       id: z.string(),
     }))
     .query(async ({ c, input, ctx }) => {
+      // Use legacy organizationId for now
+      const organizationId = ctx.user.organizationId
+      
+      if (!organizationId) {
+        throw new HTTPException(400, { message: "No organization context available" })
+      }
+
       const location = await db.location.findFirst({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
         select: {
           id: true,

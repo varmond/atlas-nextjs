@@ -21,7 +21,12 @@ const authMiddlewae = j.middleware(async ({ c, next }) => {
   if (authHeader) {
     const apiKey = authHeader.split(" ")[1]
 
-    const user = await db.user.findUnique({ where: { apiKey } })
+    const user = await db.user.findUnique({ 
+      where: { apiKey },
+      include: {
+        organization: true
+      }
+    })
 
     if (user) {
       return next({ user })
@@ -34,7 +39,12 @@ const authMiddlewae = j.middleware(async ({ c, next }) => {
     throw new HTTPException(401, { message: "Unauthorized" })
   }
 
-  const user = await db.user.findUnique({ where: { externalId: auth.id } })
+  const user = await db.user.findUnique({ 
+    where: { externalId: auth.id },
+    include: {
+      organization: true
+    }
+  })
 
   if (!user) {
     throw new HTTPException(401, { message: "Unauthorized" })

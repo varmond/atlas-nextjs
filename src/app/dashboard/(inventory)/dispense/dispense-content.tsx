@@ -58,7 +58,7 @@ export function DispenseContent({ user }: DispenseContentProps) {
     },
   })
 
-  const { data: inventoryData } = useQuery({
+  const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ["inventory"],
     queryFn: async () => {
       const response = await client.inventory.getInventory.$get()
@@ -109,18 +109,25 @@ export function DispenseContent({ user }: DispenseContentProps) {
                 <Select
                   onValueChange={field.onChange}
                   defaultValue={field.value}
+                  disabled={isLoadingInventory}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select an item" />
+                      <SelectValue placeholder={isLoadingInventory ? "Loading..." : "Select an item"} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {inventoryData?.inventoryItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.product.name} - Lot: {item.lotNumber} ({item.unitsReceived} units)
-                      </SelectItem>
-                    ))}
+                    {isLoadingInventory ? (
+                      <SelectItem value="" disabled>Loading inventory...</SelectItem>
+                    ) : inventoryData?.inventoryItems?.length === 0 ? (
+                      <SelectItem value="" disabled>No inventory items found</SelectItem>
+                    ) : (
+                      inventoryData?.inventoryItems?.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.product.name} - Lot: {item.lotNumber} ({item.unitsReceived} units)
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 <FormMessage />

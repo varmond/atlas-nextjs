@@ -178,6 +178,7 @@ export const inventoryRouter = router({
           receiptNumber: z.string().optional(),
           notes: z.string().optional(),
           locationId: z.string().min(1),
+          subLocationId: z.string().optional(),
         }),
         items: z.array(
           z.object({
@@ -228,6 +229,7 @@ export const inventoryRouter = router({
                 headerId: inventoryHeader.id,
                 productId: item.productId,
                 locationId: header.locationId,
+                subLocationId: header.subLocationId,
               },
             })
           )

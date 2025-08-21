@@ -21,9 +21,11 @@ import {
   ArrowRightLeft,
   MinusCircleIcon,
   ClockIcon,
+  Building2,
 } from "lucide-react"
 import Link from "next/link"
 import { PropsWithChildren, useState } from "react"
+import { OrganizationSwitcher } from "@/components/organization-switcher"
 
 interface SidebarItem {
   href: string
@@ -67,7 +69,7 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
       },
       { href: "/dashboard/transfers", icon: ArrowRightLeft, text: "Transfers" },
       { href: "/dashboard/dispense", icon: MinusCircleIcon, text: "Dispense" },
-      { href: "/dashboard/dispense/history", icon: ClockIcon, text: "Dispense History" },
+      // { href: "/dashboard/dispense/history", icon: ClockIcon, text: "Dispense History" },
     ],
   },
   {
@@ -96,25 +98,39 @@ const SIDEBAR_ITEMS: SidebarCategory[] = [
       { href: "/dashboard/purchasing/view-purchase-orders", icon: DollarSign, text: "Purchase Orders" },
     ],
   },
+  {
+    category: "Reports",
+    items: [
+      { href: "/dashboard/dispense/history", icon: ClockIcon, text: "Dispense History" },
+    ],
+  },
+  {
+    category: "Admin",
+    items: [
+      { href: "/dashboard/admin/organizations", icon: Building2, text: "Organizations" },
+    ],
+  },
 ]
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   return (
-    <div className="space-y-4 md:space-y-6 relative z-20 flex flex-col h-full">
-      {/* logo */}
-      <p className="hidden sm:block text-lg/7 font-semibold text-brand-900">
-        Peppers<span className="text-brand-700">Atlas</span>
-      </p>
+    <div className="flex flex-col h-full">
+      {/* logo - compact */}
+      <div className="flex-shrink-0 pb-3">
+        <p className="hidden sm:block text-lg/7 font-semibold text-brand-900">
+          Peppers<span className="text-brand-700">Atlas</span>
+        </p>
+      </div>
 
-      {/* navigation items */}
-      <div className="flex-grow">
-        <ul>
+      {/* scrollable navigation items */}
+      <div className="flex-1 overflow-y-auto">
+        <ul className="space-y-4">
           {SIDEBAR_ITEMS.map(({ category, items }) => (
-            <li key={category} className="mb-4 md:mb-8">
-              <p className="text-xs font-medium leading-6 text-zinc-500">
+            <li key={category} className="space-y-2">
+              <p className="text-xs font-medium leading-4 text-zinc-500 px-2 py-1">
                 {category}
               </p>
-              <div className="-mx-2 flex flex-1 flex-col">
+              <div className="space-y-1">
                 {items.map((item, i) => (
                   <Link
                     key={i}
@@ -125,8 +141,8 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
                     )}
                     onClick={onClose}
                   >
-                    <item.icon className="size-4 text-zinc-500 group-hover:text-zinc-700" />
-                    {item.text}
+                    <item.icon className="size-4 text-zinc-500 group-hover:text-zinc-700 flex-shrink-0" />
+                    <span className="truncate">{item.text}</span>
                   </Link>
                 ))}
               </div>
@@ -135,17 +151,20 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
         </ul>
       </div>
 
-      <div className="flex flex-col">
-        <hr className="my-4 md:my-6 w-full h-px bg-gray-100" />
-
-        <UserButton
-          showName
-          appearance={{
-            elements: {
-              userButtonBox: "flex-row-reverse",
-            },
-          }}
-        />
+      {/* user section - compact */}
+      <div className="flex-shrink-0 pt-2">
+        <hr className="mb-2 w-full h-px bg-gray-100" />
+        <div className="space-y-2">
+          <OrganizationSwitcher />
+          <UserButton
+            showName
+            appearance={{
+              elements: {
+                userButtonBox: "flex-row-reverse",
+              },
+            }}
+          />
+        </div>
       </div>
     </div>
   )
@@ -156,8 +175,8 @@ const Layout = ({ children }: PropsWithChildren) => {
 
   return (
     <div className="relative h-screen flex flex-col md:flex-row bg-white overflow-hidden">
-      {/* sidebar for desktop */}
-      <div className="hidden md:block w-64 lg:w-80 border-r border-gray-100 p-6 h-full text-brand-900 relative z-10">
+      {/* sidebar for desktop - more compact */}
+      <div className="hidden md:block w-56 lg:w-64 border-r border-gray-100 p-4 h-full text-brand-900 relative z-10">
         <Sidebar />
       </div>
 
@@ -202,7 +221,7 @@ const Layout = ({ children }: PropsWithChildren) => {
             </button>
           </div>
 
-          <Sidebar />
+          <Sidebar onClose={() => setIsDrawerOpen(false)} />
         </Modal>
       </div>
     </div>

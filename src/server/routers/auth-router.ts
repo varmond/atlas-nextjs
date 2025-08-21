@@ -11,7 +11,16 @@ export const authRouter = router({
       return c.json({ isSynced: false })
     }
 
-    const user = await db.user.findFirst({ where: { externalId: auth.id } })
+    const user = await db.user.findFirst({ 
+      where: { externalId: auth.id },
+      include: {
+        userOrganizations: {
+          include: {
+            organization: true
+          }
+        }
+      }
+    })
 
     if (!user) {
       // Create organization first
@@ -23,18 +32,38 @@ export const authRouter = router({
         },
       })
 
-      // Then create user with organization
-      await db.user.create({
+      // Create user
+      const newUser = await db.user.create({
         data: {
           quotaLimit: 100,
           externalId: auth.id,
           email: auth.emailAddresses[0].emailAddress,
-          organizationId: organization.id,
+          currentOrganizationId: organization.id, // Set as current organization
           role: 'OWNER',
         },
       })
 
+      // Create UserOrganization record
+      await db.userOrganization.create({
+        data: {
+          userId: newUser.id,
+          organizationId: organization.id,
+          role: 'OWNER',
+          isActive: true,
+        }
+      })
+
       return c.json({ isSynced: true })
+    }
+
+    // If user exists but has no current organization, set one
+    if (!user.currentOrganizationId && user.userOrganizations.length > 0) {
+      await db.user.update({
+        where: { id: user.id },
+        data: { 
+          currentOrganizationId: user.userOrganizations[0].organizationId 
+        }
+      })
     }
 
     return c.json({ isSynced: true })

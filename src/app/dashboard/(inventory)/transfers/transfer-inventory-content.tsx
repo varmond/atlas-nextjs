@@ -39,12 +39,12 @@ export function TransferInventoryContent({ user }: TransferInventoryContentProps
   const { data: locationsData } = useQuery({
     queryKey: ["locations"],
     queryFn: async () => {
-      const response = await client.inventory.getLocations.$get()
+      const response = await client.location.getLocations.$get()
       return response.json()
     },
   })
 
-  const { data: inventoryData } = useQuery({
+  const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
     queryKey: ["inventory", sourceLocationId],
     queryFn: async () => {
       const response = await client.inventory.getInventory.$get({
@@ -120,16 +120,22 @@ export function TransferInventoryContent({ user }: TransferInventoryContentProps
 
         <div className="space-y-4">
           <h3 className="font-medium">Item Details</h3>
-          <Select value={inventoryId} onValueChange={setInventoryId}>
+          <Select value={inventoryId} onValueChange={setInventoryId} disabled={isLoadingInventory}>
             <SelectTrigger>
-              <SelectValue placeholder="Select inventory item" />
+              <SelectValue placeholder={isLoadingInventory ? "Loading..." : "Select inventory item"} />
             </SelectTrigger>
             <SelectContent>
-              {inventoryData?.inventoryItems.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.product.name} - {item.lotNumber}
-                </SelectItem>
-              ))}
+              {isLoadingInventory ? (
+                <SelectItem value="" disabled>Loading inventory...</SelectItem>
+              ) : inventoryData?.inventoryItems?.length === 0 ? (
+                <SelectItem value="" disabled>No inventory items found at this location</SelectItem>
+              ) : (
+                inventoryData?.inventoryItems?.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.product.name} - {item.lotNumber}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
 
