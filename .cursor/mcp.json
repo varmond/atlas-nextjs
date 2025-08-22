@@ -1,5 +1,8 @@
 {
     "mcpServers": {
+        "shadcn": {
+            "url": "https://www.shadcn.io/api/mcp"
+          },
         "task-master-ai": {
             "command": "npx",
             "args": [

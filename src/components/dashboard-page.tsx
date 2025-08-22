@@ -11,39 +11,103 @@ interface DashboardPageProps {
   children: ReactNode
   hideBackButton?: boolean
   cta?: ReactNode
+  subtitle?: string
+  breadcrumbs?: Array<{ label: string; href?: string }>
 }
+
 export const DashboardPage = ({
   title,
   children,
   cta,
   hideBackButton,
+  subtitle,
+  breadcrumbs,
 }: DashboardPageProps) => {
   const router = useRouter()
+  
   return (
-    <section className="flex h-full w-full flex-1 flex-col">
-      <div className="w-full flex justify-between border-b border-gray-200 p-6 sm:p-8">
-        <div className="w-full flex flex-col sm:flex-row gap-x-8 gap-6 items-start sm:items-center">
-          <div className="flex items-center gap-10">
-            {hideBackButton ? null : (
-              <Button
-                onClick={() => router.push("./")}
-                className="w-fit bg-white"
-                variant={"outline"}
-              >
-                <ArrowLeft className="size-4" />
-              </Button>
+    <div className="min-h-full bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-6">
+            {/* Breadcrumbs */}
+            {breadcrumbs && breadcrumbs.length > 0 && (
+              <nav className="flex mb-4" aria-label="Breadcrumb">
+                <ol className="flex items-center space-x-2">
+                  {breadcrumbs.map((crumb, index) => (
+                    <li key={index} className="flex items-center">
+                      {index > 0 && (
+                        <svg
+                          className="w-4 h-4 text-gray-400 mx-2"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                      {crumb.href ? (
+                        <button
+                          onClick={() => router.push(crumb.href!)}
+                          className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          {crumb.label}
+                        </button>
+                      ) : (
+                        <span className="text-sm text-gray-900 font-medium">
+                          {crumb.label}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </nav>
             )}
 
-            <Heading>{title}</Heading>
+            {/* Title Section */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                {!hideBackButton && (
+                  <Button
+                    onClick={() => router.back()}
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
+                )}
+                <div>
+                  <Heading className="text-2xl font-bold text-gray-900">
+                    {title}
+                  </Heading>
+                  {subtitle && (
+                    <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
+                  )}
+                </div>
+              </div>
+              
+              {cta && (
+                <div className="flex items-center space-x-3">
+                  {cta}
+                </div>
+              )}
+            </div>
           </div>
-
-          {cta ? <div className="w-full">{cta}</div> : null}
         </div>
       </div>
 
-      <div className="flex-1 p-6 sm:p-8 flex flex-col overflow-y-auto">
-        {children}
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-6">
+          {children}
+        </div>
       </div>
-    </section>
+    </div>
   )
 }

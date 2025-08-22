@@ -1,218 +1,306 @@
 "use client"
 
-import { LoadingSpinner } from "@/components/loading-spinner"
+import { useState, useMemo, useCallback, memo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DataTable } from "@/components/ui/data-table"
 import { client } from "@/lib/client"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { format } from "date-fns"
-import { Package, Save, Trash2 } from "lucide-react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { format, isAfter, addDays } from "date-fns"
+import { 
+  Package, 
+  Save, 
+  Trash2, 
+  ArrowLeft, 
+  Edit, 
+  Calendar,
+  MapPin,
+  Building2,
+  DollarSign,
+  AlertTriangle,
+  Clock,
+  CheckCircle,
+  Eye,
+  History,
+  FileText,
+  BarChart3
+} from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { Modal } from "@/components/ui/modal"
-import React from "react"
+import { useToast } from "@/hooks/use-toast"
 
-// Define the inventory item type based on how you'll structure your data
 interface InventoryItem {
   id: string
-  name: string
-  sku: string
-  category: string
-  quantity: number
-  price: number
-  description?: string
-  createdAt: Date
-  updatedAt: Date
+  productId: string
+  price: number | string
+  packageCost: number | string
+  lotNumber: string
+  expirationDate: string | Date
+  serialNumber: string
+  vendor: string
+  manufacturer: string
+  unitsReceived: number
+  createdAt: string | Date
+  updatedAt: string | Date
+  organizationId: string
+  userId: string
+  locationId: string
+  headerId: string
+  subLocationId: string | null
+  product: {
+    name: string
+    sku: string
+    type: string
+  }
+  Location?: {
+    name: string
+  }
+  subLocation?: {
+    name: string
+    code: string
+  }
 }
 
-const INVENTORY_ITEM_VALIDATOR = z.object({
-  name: z.string().min(1, "Product name is required."),
-  sku: z.string().min(1, "SKU is required."),
-  category: z.string().min(1, "Category is required."),
-  quantity: z.number().int().min(0, "Quantity must be a non-negative integer."),
-  price: z.number().min(0, "Price must be a non-negative number."),
-  description: z.string().optional(),
+interface Transaction {
+  id: string
+  type: 'dispense' | 'transfer' | 'adjustment'
+  quantity: number
+  date: string
+  user: string
+  notes?: string
+  location?: string
+}
+
+// Memoized status badge component
+const StatusBadge = memo(({ item }: { item: InventoryItem }) => {
+  const expirationDate = new Date(item.expirationDate)
+  const today = new Date()
+  const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  
+  if (daysUntilExpiry < 0) {
+    return <Badge variant="destructive">Expired</Badge>
+  } else if (daysUntilExpiry <= 30) {
+    return <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200">Expiring Soon</Badge>
+  } else if (item.unitsReceived <= 10) {
+    return <Badge variant="secondary" className="bg-red-100 text-red-700 border-red-200">Low Stock</Badge>
+  } else {
+    return <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">In Stock</Badge>
+  }
 })
 
-type InventoryItemForm = z.infer<typeof INVENTORY_ITEM_VALIDATOR>
+StatusBadge.displayName = "StatusBadge"
 
-const CATEGORY_OPTIONS = [
-  "Apparel",
-  "Electronics",
-  "Accessories",
-  "Books",
-  "Home & Kitchen",
-  "Office Supplies",
-  "Sports & Outdoors",
-  "Other",
-]
+// Memoized transaction type badge
+const TransactionTypeBadge = memo(({ type }: { type: string }) => {
+  const colorMap = {
+    dispense: "bg-red-50 text-red-700 border-red-200",
+    transfer: "bg-blue-50 text-blue-700 border-blue-200",
+    adjustment: "bg-purple-50 text-purple-700 border-purple-200",
+  }
+
+  const labelMap = {
+    dispense: "Dispensed",
+    transfer: "Transferred", 
+    adjustment: "Adjusted",
+  }
+
+  return (
+    <Badge variant="outline" className={colorMap[type as keyof typeof colorMap] || colorMap.adjustment}>
+      {labelMap[type as keyof typeof labelMap] || type}
+    </Badge>
+  )
+})
+
+TransactionTypeBadge.displayName = "TransactionTypeBadge"
 
 interface InventoryDetailPageContentProps {
   itemId: string
 }
 
-export const InventoryDetailPageContent = ({
-  itemId,
-}: InventoryDetailPageContentProps) => {
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+export function InventoryDetailPageContent({ itemId }: InventoryDetailPageContentProps) {
+  const [activeTab, setActiveTab] = useState("overview")
   const router = useRouter()
   const queryClient = useQueryClient()
+  const { toast } = useToast()
 
-  // This would be replaced with your actual query to fetch inventory item details
-  const { data: inventoryItem, isPending: isItemLoading } = useQuery({
+  // Fetch inventory item details
+  const { data: inventoryItem, isLoading, error } = useQuery({
     queryKey: ["inventory-item", itemId],
     queryFn: async () => {
-      // Replace with actual API endpoint once implemented
-      // const res = await client.inventory.getInventoryItemById.$get({ id: itemId })
-      // return await res.json()
+      const response = await client.inventory.getInventoryItemById.$get({ id: itemId })
+      const data = await response.json()
+      return data.inventoryItem
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
 
-      // Mock data for now based on itemId
-      // In a real implementation, you would fetch from your API
-      const mockItems: Record<string, InventoryItem> = {
-        "1": {
+  // Fetch transaction history
+  const { data: transactions } = useQuery({
+    queryKey: ["inventory-transactions", itemId],
+    queryFn: async () => {
+      // This would be replaced with actual API endpoint
+      // For now, return mock data
+      return [
+        {
           id: "1",
-          name: "T-Shirt - Black",
-          sku: "TS-BLK-001",
-          category: "Apparel",
-          quantity: 150,
-          price: 19.99,
-          description: "Premium quality cotton t-shirt in classic black.",
-          createdAt: new Date(2025, 2, 10),
-          updatedAt: new Date(2025, 2, 10),
+          type: "dispense" as const,
+          quantity: 5,
+          date: new Date().toISOString(),
+          user: "john@example.com",
+          notes: "Patient dispense",
+          location: "Main Clinic"
         },
-        "2": {
-          id: "2",
-          name: "Coffee Mug",
-          sku: "MUG-WHT-001",
-          category: "Accessories",
-          quantity: 75,
-          price: 12.99,
-          description: "Ceramic coffee mug with company logo.",
-          createdAt: new Date(2025, 2, 12),
-          updatedAt: new Date(2025, 2, 12),
-        },
-        "3": {
-          id: "3",
-          name: "Wireless Mouse",
-          sku: "TECH-MOU-001",
-          category: "Electronics",
-          quantity: 35,
-          price: 29.99,
-          description: "Ergonomic wireless mouse with long battery life.",
-          createdAt: new Date(2025, 2, 15),
-          updatedAt: new Date(2025, 2, 15),
-        },
-      }
-
-      // Simulate 1 second loading time to show loading state
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      if (mockItems[itemId]) {
-        return mockItems[itemId]
-      }
-
-      throw new Error("Item not found")
-    },
-  })
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isDirty },
-    setValue,
-  } = useForm<InventoryItemForm>({
-    resolver: zodResolver(INVENTORY_ITEM_VALIDATOR),
-    // Set default values once data is loaded
-    values: inventoryItem
-      ? {
-          name: inventoryItem.name,
-          sku: inventoryItem.sku,
-          category: inventoryItem.category,
-          quantity: inventoryItem.quantity,
-          price: inventoryItem.price,
-          description: inventoryItem.description || "",
+        {
+          id: "2", 
+          type: "transfer" as const,
+          quantity: 10,
+          date: new Date(Date.now() - 86400000).toISOString(),
+          user: "admin@example.com",
+          notes: "Transfer to secondary location",
+          location: "Secondary Clinic"
         }
-      : undefined,
+      ] as Transaction[]
+    },
+    enabled: !!inventoryItem,
   })
 
-  // Reset form when inventory item data is fetched
-  React.useEffect(() => {
-    if (inventoryItem) {
-      reset({
-        name: inventoryItem.name,
-        sku: inventoryItem.sku,
-        category: inventoryItem.category,
-        quantity: inventoryItem.quantity,
-        price: inventoryItem.price,
-        description: inventoryItem.description || "",
-      })
+  // Memoized inventory statistics
+  const stats = useMemo(() => {
+    if (!inventoryItem) return null
+
+    const expirationDate = new Date(inventoryItem.expirationDate)
+    const today = new Date()
+    const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    
+    const totalValue = typeof inventoryItem.price === "number" 
+      ? inventoryItem.price * inventoryItem.unitsReceived
+      : parseFloat(inventoryItem.price as string) * inventoryItem.unitsReceived
+
+    return {
+      daysUntilExpiry,
+      totalValue: totalValue.toFixed(2),
+      isExpired: daysUntilExpiry < 0,
+      isExpiringSoon: daysUntilExpiry <= 30 && daysUntilExpiry >= 0,
+      isLowStock: inventoryItem.unitsReceived <= 10,
     }
-  }, [inventoryItem, reset])
+  }, [inventoryItem])
 
-  const { mutate: updateInventoryItem, isPending: isUpdating } = useMutation({
-    mutationFn: async (data: InventoryItemForm) => {
-      // Replace with actual API endpoint once implemented
-      // await client.inventory.updateInventoryItem.$post({ id: itemId, ...data })
-      console.log("Updating inventory item:", itemId, data)
-      return { success: true }
+  // Memoized transaction columns
+  const transactionColumns = useMemo(() => [
+    {
+      key: 'type' as keyof Transaction,
+      header: 'Type',
+      sortable: true,
+      filterable: true,
+      width: 120,
+      render: (value: any, row: Transaction) => <TransactionTypeBadge type={row.type} />,
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory-item", itemId] })
-      queryClient.invalidateQueries({ queryKey: ["inventory-items"] })
-      setSuccessMessage("Item updated successfully!")
-      setTimeout(() => {
-        setSuccessMessage(null)
-      }, 3000)
+    {
+      key: 'quantity' as keyof Transaction,
+      header: 'Quantity',
+      sortable: true,
+      filterable: true,
+      width: 100,
+      render: (value: any, row: Transaction) => (
+        <span className={row.type === 'dispense' ? 'text-red-600' : 'text-green-600'}>
+          {row.type === 'dispense' ? '-' : '+'}{row.quantity}
+        </span>
+      ),
     },
-  })
+    {
+      key: 'date' as keyof Transaction,
+      header: 'Date',
+      sortable: true,
+      filterable: true,
+      width: 150,
+      render: (value: any, row: Transaction) => format(new Date(row.date), 'MMM dd, yyyy HH:mm'),
+    },
+    {
+      key: 'user' as keyof Transaction,
+      header: 'User',
+      sortable: true,
+      filterable: true,
+      width: 150,
+      render: (value: any, row: Transaction) => row.user,
+    },
+    {
+      key: 'location' as keyof Transaction,
+      header: 'Location',
+      sortable: true,
+      filterable: true,
+      width: 150,
+      render: (value: any, row: Transaction) => row.location || 'N/A',
+    },
+    {
+      key: 'notes' as keyof Transaction,
+      header: 'Notes',
+      sortable: false,
+      filterable: true,
+      width: 200,
+      render: (value: any, row: Transaction) => row.notes || 'No notes',
+    },
+  ], [])
 
-  const { mutate: deleteInventoryItem, isPending: isDeleting } = useMutation({
+  // Delete mutation
+  const deleteMutation = useMutation({
     mutationFn: async () => {
-      // Replace with actual API endpoint once implemented
-      // await client.inventory.deleteInventoryItem.$post({ id: itemId })
-      console.log("Deleting inventory item:", itemId)
-      return { success: true }
+      const response = await client.inventory.deleteInventoryItem.$post({ id: itemId })
+      if (!response.ok) {
+        throw new Error('Failed to delete inventory item')
+      }
+      return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["inventory-items"] })
-      router.push("/dashboard/inventory")
+      toast({
+        title: "Success",
+        description: "Inventory item deleted successfully",
+      })
+      queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      router.push("/dashboard/view-inventory")
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete inventory item",
+        variant: "destructive",
+      })
     },
   })
 
-  const onSubmit = (data: InventoryItemForm) => {
-    updateInventoryItem(data)
-  }
+  // Handle delete confirmation
+  const handleDelete = useCallback(() => {
+    if (confirm("Are you sure you want to delete this inventory item? This action cannot be undone.")) {
+      deleteMutation.mutate()
+    }
+  }, [deleteMutation])
 
-  if (isItemLoading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full w-full">
-        <LoadingSpinner />
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Package className="mx-auto h-12 w-12 text-gray-400 animate-pulse" />
+          <p className="mt-2 text-sm text-gray-500">Loading inventory details...</p>
+        </div>
       </div>
     )
   }
 
-  if (!inventoryItem) {
+  if (error || !inventoryItem) {
     return (
       <Card className="p-6">
-        <div className="flex flex-col items-center justify-center py-8">
-          <Package className="h-16 w-16 text-gray-300 mb-4" />
+        <div className="text-center py-12">
+          <Package className="mx-auto h-16 w-16 text-gray-300 mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
             Item Not Found
           </h2>
           <p className="text-sm text-gray-600 mb-6">
-            The inventory item you're looking for doesn't exist or has been
-            removed.
+            The inventory item you're looking for doesn't exist or has been removed.
           </p>
           <Button
             variant="outline"
-            onClick={() => router.push("/dashboard/inventory")}
+            onClick={() => router.push("/dashboard/view-inventory")}
           >
             Return to Inventory
           </Button>
@@ -222,180 +310,297 @@ export const InventoryDetailPageContent = ({
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      {successMessage && (
-        <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
-          <span className="block sm:inline">{successMessage}</span>
-        </div>
-      )}
-
-      <Card className="p-6">
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Item Details
-              </h2>
-              <p className="text-sm text-gray-600">
-                Last updated:{" "}
-                {format(inventoryItem.updatedAt, "MMM d, yyyy 'at' h:mm a")}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-red-600 border-red-200 hover:bg-red-50"
-                onClick={() => setShowDeleteModal(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-              <Button type="submit" size="sm" disabled={isUpdating || !isDirty}>
-                <Save className="h-4 w-4 mr-2" />
-                {isUpdating ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="name">Product Name</Label>
-              <Input id="name" {...register("name")} className="w-full" />
-              {errors.name ? (
-                <p className="mt-1 text-sm text-red-500">
-                  {errors.name.message}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="sku">SKU</Label>
-                <Input id="sku" {...register("sku")} className="w-full" />
-                {errors.sku ? (
-                  <p className="mt-1 text-sm text-red-500">
-                    {errors.sku.message}
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <Label htmlFor="category">Category</Label>
-                <select
-                  id="category"
-                  {...register("category")}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-brand-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                >
-                  <option value="">Select a category</option>
-                  {CATEGORY_OPTIONS.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-                {errors.category ? (
-                  <p className="mt-1 text-sm text-red-500">
-                    {errors.category.message}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  {...register("quantity", { valueAsNumber: true })}
-                  min="0"
-                  className="w-full"
-                />
-                {errors.quantity ? (
-                  <p className="mt-1 text-sm text-red-500">
-                    {errors.quantity.message}
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <Label htmlFor="price">Price ($)</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  {...register("price", { valueAsNumber: true })}
-                  min="0"
-                  className="w-full"
-                />
-                {errors.price ? (
-                  <p className="mt-1 text-sm text-red-500">
-                    {errors.price.message}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description (Optional)</Label>
-              <textarea
-                id="description"
-                {...register("description")}
-                rows={3}
-                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-brand-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-              />
-              {errors.description ? (
-                <p className="mt-1 text-sm text-red-500">
-                  {errors.description.message}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push("/dashboard/inventory")}
-            >
-              Back to Inventory
-            </Button>
-          </div>
-        </form>
-      </Card>
-
-      <Modal
-        showModal={showDeleteModal}
-        setShowModal={setShowDeleteModal}
-        className="max-w-md p-8"
-      >
-        <div className="space-y-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back</span>
+          </Button>
           <div>
-            <h2 className="text-lg/7 font-medium tracking-tight text-gray-950">
-              Delete Item
-            </h2>
-            <p className="text-sm/6 text-gray-600">
-              Are you sure you want to delete "{inventoryItem.name}"? This
-              action cannot be undone.
+            <h1 className="text-2xl font-bold text-gray-900">
+              {inventoryItem.product.name}
+            </h1>
+            <p className="text-sm text-gray-500">
+              SKU: {inventoryItem.product.sku} • Lot: {inventoryItem.lotNumber}
             </p>
           </div>
-
-          <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteInventoryItem()}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </Button>
-          </div>
         </div>
-      </Modal>
+        <div className="flex items-center space-x-2">
+          <StatusBadge item={inventoryItem} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/dashboard/inventory/${itemId}?edit=true`)}
+            className="flex items-center space-x-2"
+          >
+            <Edit className="w-4 h-4" />
+            <span>Edit</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+            className="flex items-center space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Package className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Available Units</p>
+              <p className="text-2xl font-bold text-gray-900">{inventoryItem.unitsReceived}</p>
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <DollarSign className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Value</p>
+              <p className="text-2xl font-bold text-gray-900">${stats?.totalValue}</p>
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className={`p-2 rounded-lg ${
+              stats?.isExpired ? 'bg-red-100' : 
+              stats?.isExpiringSoon ? 'bg-orange-100' : 'bg-green-100'
+            }`}>
+              <Calendar className={`w-6 h-6 ${
+                stats?.isExpired ? 'text-red-600' : 
+                stats?.isExpiringSoon ? 'text-orange-600' : 'text-green-600'
+              }`} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Expiration</p>
+              <p className={`text-2xl font-bold ${
+                stats?.isExpired ? 'text-red-600' : 
+                stats?.isExpiringSoon ? 'text-orange-600' : 'text-green-600'
+              }`}>
+                {stats?.isExpired ? 'Expired' : 
+                 stats?.isExpiringSoon ? `${stats.daysUntilExpiry}d` : 
+                 `${stats?.daysUntilExpiry}d`}
+              </p>
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <History className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Transactions</p>
+              <p className="text-2xl font-bold text-gray-900">{transactions?.length || 0}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="overview" className="flex items-center space-x-2">
+            <Eye className="w-4 h-4" />
+            <span>Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center space-x-2">
+            <History className="w-4 h-4" />
+            <span>History</span>
+          </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center space-x-2">
+            <BarChart3 className="w-4 h-4" />
+            <span>Analytics</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Basic Information */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Product Name</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.product.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">SKU</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.product.sku}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Product Type</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.product.type}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Lot Number</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.lotNumber}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Serial Number</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.serialNumber}</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Location & Vendor Information */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Location & Vendor</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Location</label>
+                  <p className="mt-1 text-gray-900 flex items-center">
+                    <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                    {inventoryItem.Location?.name || 'No location assigned'}
+                  </p>
+                </div>
+                {inventoryItem.subLocation && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Sub-Location</label>
+                    <p className="mt-1 text-gray-900 flex items-center">
+                      <Building2 className="w-4 h-4 mr-2 text-gray-400" />
+                      {inventoryItem.subLocation.name} ({inventoryItem.subLocation.code})
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Vendor</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.vendor}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Manufacturer</label>
+                  <p className="mt-1 text-gray-900">{inventoryItem.manufacturer}</p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Financial Information */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Information</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Unit Price</label>
+                  <p className="mt-1 text-gray-900 flex items-center">
+                    <DollarSign className="w-4 h-4 mr-2 text-gray-400" />
+                    ${typeof inventoryItem.price === "number" ? inventoryItem.price.toFixed(2) : parseFloat(inventoryItem.price as string).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Package Cost</label>
+                  <p className="mt-1 text-gray-900 flex items-center">
+                    <DollarSign className="w-4 h-4 mr-2 text-gray-400" />
+                    ${typeof inventoryItem.packageCost === "number" ? inventoryItem.packageCost.toFixed(2) : parseFloat(inventoryItem.packageCost as string).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Total Value</label>
+                  <p className="mt-1 text-gray-900 flex items-center">
+                    <DollarSign className="w-4 h-4 mr-2 text-gray-400" />
+                    ${stats?.totalValue}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Dates & Status */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Dates & Status</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Expiration Date</label>
+                  <p className="mt-1 text-gray-900 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                    {format(new Date(inventoryItem.expirationDate), 'MMM dd, yyyy')}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Days Until Expiry</label>
+                  <p className={`mt-1 flex items-center ${
+                    stats?.isExpired ? 'text-red-600' : 
+                    stats?.isExpiringSoon ? 'text-orange-600' : 'text-green-600'
+                  }`}>
+                    <Clock className="w-4 h-4 mr-2" />
+                    {stats?.isExpired ? 'Expired' : `${stats?.daysUntilExpiry} days`}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Created</label>
+                  <p className="mt-1 text-gray-900">{format(new Date(inventoryItem.createdAt), 'MMM dd, yyyy')}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Last Updated</label>
+                  <p className="mt-1 text-gray-900">{format(new Date(inventoryItem.updatedAt), 'MMM dd, yyyy')}</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Transaction History</h3>
+              <Button variant="outline" size="sm">
+                <FileText className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+            </div>
+            
+            {transactions && transactions.length > 0 ? (
+              <DataTable
+                data={transactions}
+                columns={transactionColumns}
+                pageSize={10}
+                searchable={true}
+                sortable={true}
+                filterable={true}
+                selectable={false}
+                loading={false}
+                emptyMessage="No transactions found for this inventory item."
+                className="w-full"
+              />
+            ) : (
+              <div className="text-center py-8">
+                <History className="mx-auto h-12 w-12 text-gray-300" />
+                <p className="mt-2 text-sm text-gray-500">No transaction history available</p>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Usage Analytics</h3>
+            <div className="text-center py-8">
+              <BarChart3 className="mx-auto h-12 w-12 text-gray-300" />
+              <p className="mt-2 text-sm text-gray-500">Analytics coming soon</p>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

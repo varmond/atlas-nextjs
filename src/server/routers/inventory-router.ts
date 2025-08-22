@@ -18,6 +18,51 @@ const inventoryCreateSchema = z.object({
 })
 
 export const inventoryRouter = router({
+  getInventoryItemById: privateProcedure
+    .input(z.object({
+      id: z.string().min(1, "Inventory item ID is required"),
+    }))
+    .query(async ({ c, ctx, input }) => {
+      try {
+        const inventoryItem = await db.inventory.findFirst({
+          where: {
+            id: input.id,
+            organizationId: ctx.user.organizationId ?? "",
+          },
+          include: {
+            product: {
+              select: {
+                name: true,
+                sku: true,
+                type: true,
+              },
+            },
+            Location: {
+              select: {
+                name: true,
+              },
+            },
+            subLocation: {
+              select: {
+                name: true,
+                code: true,
+              },
+            },
+          },
+        })
+
+        if (!inventoryItem) {
+          throw new HTTPException(404, { message: "Inventory item not found" })
+        }
+
+        return c.json({ inventoryItem })
+      } catch (error) {
+        console.error("Error fetching inventory item:", error)
+        if (error instanceof HTTPException) throw error
+        throw new HTTPException(500, { message: "Failed to fetch inventory item" })
+      }
+    }),
+
   getInventory: privateProcedure
     .input(z.object({
       productId: z.string().optional(),
@@ -38,6 +83,17 @@ export const inventoryRouter = router({
             select: {
               name: true,
               sku: true,
+            },
+          },
+          Location: {
+            select: {
+              name: true,
+            },
+          },
+          subLocation: {
+            select: {
+              name: true,
+              code: true,
             },
           },
         },
@@ -245,6 +301,37 @@ export const inventoryRouter = router({
         throw new HTTPException(500, {
           message: "Failed to create batch inventory",
         })
+      }
+    }),
+
+  deleteInventoryItem: privateProcedure
+    .input(z.object({
+      id: z.string().min(1, "Inventory item ID is required"),
+    }))
+    .mutation(async ({ c, input, ctx }) => {
+      try {
+        // Check if inventory item exists and belongs to organization
+        const inventoryItem = await db.inventory.findFirst({
+          where: {
+            id: input.id,
+            organizationId: ctx.user.organizationId ?? "",
+          },
+        })
+
+        if (!inventoryItem) {
+          throw new HTTPException(404, { message: "Inventory item not found" })
+        }
+
+        // Delete the inventory item
+        await db.inventory.delete({
+          where: { id: input.id },
+        })
+
+        return c.json({ success: true, message: "Inventory item deleted successfully" })
+      } catch (error) {
+        console.error("Error deleting inventory item:", error)
+        if (error instanceof HTTPException) throw error
+        throw new HTTPException(500, { message: "Failed to delete inventory item" })
       }
     }),
 

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Button } from "@/components/ui/button"
-import { format, isAfter, addDays, startOfDay, endOfDay, isWithinInterval } from "date-fns"
+import { format, isAfter } from "date-fns"
 import { 
   Download, 
   Filter, 
@@ -23,32 +23,39 @@ import {
   Clock,
   User,
   MapPin,
-  TrendingDown,
-  FileText
+  ArrowRightLeft,
+  FileText,
+  TrendingUp
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-interface DispenseHistoryContentProps {
+interface TransferHistoryContentProps {
   user: any
 }
 
-interface DispenseRecord {
+interface TransferRecord {
   id: string
   quantity: number
-  note: string | null
-  dispensedAt: string
+  notes: string | null
+  createdAt: string
   inventory: {
     product: {
       name: string
     }
     lotNumber: string
-    Location: {
-      name: string
-    } | null
-    subLocation: {
-      name: string
-    } | null
   }
+  sourceLocation: {
+    name: string
+  }
+  destLocation: {
+    name: string
+  }
+  sourceSubLocation: {
+    name: string
+  } | null
+  destSubLocation: {
+    name: string
+  } | null
   user: {
     email: string
   }
@@ -56,7 +63,8 @@ interface DispenseRecord {
 
 interface FilterState {
   search: string
-  location: string
+  sourceLocation: string
+  destLocation: string
   user: string
   dateRange: {
     from: Date | undefined
@@ -69,13 +77,15 @@ const FilterPanel = memo(({
   filters, 
   onFilterChange, 
   onClearFilters,
-  locations,
+  sourceLocations,
+  destLocations,
   users 
 }: { 
   filters: FilterState
   onFilterChange: (filters: FilterState) => void
   onClearFilters: () => void
-  locations: string[]
+  sourceLocations: string[]
+  destLocations: string[]
   users: string[]
 }) => (
   <Card className="p-4 mb-6">
@@ -92,7 +102,7 @@ const FilterPanel = memo(({
       </Button>
     </div>
     
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -104,17 +114,35 @@ const FilterPanel = memo(({
         />
       </div>
 
-      {/* Location Filter */}
+      {/* Source Location Filter */}
       <Select
-        value={filters.location}
-        onValueChange={(value) => onFilterChange({ ...filters, location: value })}
+        value={filters.sourceLocation}
+        onValueChange={(value) => onFilterChange({ ...filters, sourceLocation: value })}
       >
         <SelectTrigger>
-          <SelectValue placeholder="All Locations" />
+          <SelectValue placeholder="All Source Locations" />
         </SelectTrigger>
         <SelectContent>
-                      <SelectItem value="all">All Locations</SelectItem>
-          {locations.map((location) => (
+                      <SelectItem value="all">All Source Locations</SelectItem>
+          {sourceLocations.map((location) => (
+            <SelectItem key={location} value={location}>
+              {location}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Destination Location Filter */}
+      <Select
+        value={filters.destLocation}
+        onValueChange={(value) => onFilterChange({ ...filters, destLocation: value })}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="All Dest Locations" />
+        </SelectTrigger>
+        <SelectContent>
+                      <SelectItem value="all">All Dest Locations</SelectItem>
+          {destLocations.map((location) => (
             <SelectItem key={location} value={location}>
               {location}
             </SelectItem>
@@ -190,22 +218,23 @@ const FilterPanel = memo(({
 
 FilterPanel.displayName = "FilterPanel"
 
-export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
+export function TransferHistoryContent({ user }: TransferHistoryContentProps) {
   const { toast } = useToast()
   const [filters, setFilters] = useState<FilterState>({
     search: "",
-    location: "all",
+    sourceLocation: "all",
+    destLocation: "all",
     user: "all",
     dateRange: { from: undefined, to: undefined }
   })
 
-  // Fetch dispense history
-  const { data: dispensesData, isLoading, error } = useQuery({
-    queryKey: ["dispenses"],
+  // Fetch transfer history
+  const { data: transfersData, isLoading, error } = useQuery({
+    queryKey: ["transfers"],
     queryFn: async () => {
-      const response = await client.dispense.getDispenses.$get()
+      const response = await client.transfer.getTransfers.$get()
       const data = await response.json()
-      return data.dispenses || []
+      return data.transfers || []
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -213,14 +242,14 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
 
   // Memoized filtered data
   const filteredData = useMemo(() => {
-    if (!dispensesData) return []
+    if (!transfersData) return []
 
-    return dispensesData.filter((dispense: DispenseRecord) => {
+    return transfersData.filter((transfer: TransferRecord) => {
       // Search filter
       if (filters.search) {
         const searchLower = filters.search.toLowerCase()
-        const productName = dispense.inventory.product.name.toLowerCase()
-        const lotNumber = dispense.inventory.lotNumber.toLowerCase()
+        const productName = transfer.inventory.product.name.toLowerCase()
+        const lotNumber = transfer.inventory.lotNumber.toLowerCase()
         
         if (!productName.includes(searchLower) && 
             !lotNumber.includes(searchLower)) {
@@ -228,67 +257,74 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         }
       }
 
-      // Location filter
-      if (filters.location && filters.location !== "all" && dispense.inventory.Location?.name !== filters.location) {
+      // Source location filter
+      if (filters.sourceLocation && filters.sourceLocation !== "all" && transfer.sourceLocation.name !== filters.sourceLocation) {
+        return false
+      }
+
+      // Destination location filter
+      if (filters.destLocation && filters.destLocation !== "all" && transfer.destLocation.name !== filters.destLocation) {
         return false
       }
 
       // User filter
-      if (filters.user && filters.user !== "all" && dispense.user.email !== filters.user) {
+      if (filters.user && filters.user !== "all" && transfer.user.email !== filters.user) {
         return false
       }
 
       // Date range filter
       if (filters.dateRange.from || filters.dateRange.to) {
-        const dispenseDate = new Date(dispense.dispensedAt)
+        const transferDate = new Date(transfer.createdAt)
         
-        if (filters.dateRange.from && isAfter(filters.dateRange.from, dispenseDate)) {
+        if (filters.dateRange.from && isAfter(filters.dateRange.from, transferDate)) {
           return false
         }
         
-        if (filters.dateRange.to && isAfter(dispenseDate, filters.dateRange.to)) {
+        if (filters.dateRange.to && isAfter(transferDate, filters.dateRange.to)) {
           return false
         }
       }
 
       return true
     })
-  }, [dispensesData, filters])
+  }, [transfersData, filters])
 
   // Memoized filter options
   const filterOptions = useMemo(() => {
-    if (!dispensesData) return { locations: [], users: [] }
+    if (!transfersData) return { sourceLocations: [], destLocations: [], users: [] }
 
-    const locations = Array.from(new Set(
-      dispensesData
-        .map((d: DispenseRecord) => d.inventory.Location?.name)
-        .filter(Boolean)
+    const sourceLocations = Array.from(new Set(
+      transfersData.map((t: TransferRecord) => t.sourceLocation.name)
+    )) as string[]
+
+    const destLocations = Array.from(new Set(
+      transfersData.map((t: TransferRecord) => t.destLocation.name)
     )) as string[]
 
     const users = Array.from(new Set(
-      dispensesData.map((d: DispenseRecord) => d.user.email)
+      transfersData.map((t: TransferRecord) => t.user.email)
     )) as string[]
 
-    return { locations, users }
-  }, [dispensesData])
+    return { sourceLocations, destLocations, users }
+  }, [transfersData])
 
   // Memoized statistics
   const stats = useMemo(() => {
-    if (!filteredData.length) return { totalDispenses: 0, totalQuantity: 0, totalValue: 0, avgPerDay: 0 }
+    if (!filteredData.length) return { totalTransfers: 0, totalQuantity: 0, totalValue: 0, avgPerDay: 0 }
 
-    const totalDispenses = filteredData.length
-    const totalQuantity = filteredData.reduce((sum: number, d: DispenseRecord) => sum + d.quantity, 0)
+    const totalTransfers = filteredData.length
+    const totalQuantity = filteredData.reduce((sum: number, t: TransferRecord) => sum + t.quantity, 0)
     
     // Calculate total value (this would need price data from inventory)
     const totalValue = 0 // Placeholder - would need price data
     
     // Calculate average per day
-    const dates = filteredData.map((d: DispenseRecord) => new Date(d.dispensedAt).toDateString())
+    const dates = filteredData.map((t: TransferRecord) => new Date(t.createdAt).toDateString())
     const uniqueDays = new Set(dates).size
     const avgPerDay = uniqueDays > 0 ? totalQuantity / uniqueDays : 0
 
     return {
-      totalDispenses,
+      totalTransfers,
       totalQuantity,
       totalValue: totalValue.toFixed(2),
       avgPerDay: avgPerDay.toFixed(1)
@@ -298,25 +334,25 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
   // Memoized table columns
   const columns = useMemo(() => [
     {
-      key: 'dispensedAt' as keyof DispenseRecord,
+      key: 'createdAt' as keyof TransferRecord,
       header: 'Date & Time',
       sortable: true,
       filterable: true,
       width: 150,
-      render: (value: any, row: DispenseRecord) => (
+      render: (value: any, row: TransferRecord) => (
         <div>
-          <div className="font-medium">{format(new Date(row.dispensedAt), 'MMM dd, yyyy')}</div>
-          <div className="text-sm text-gray-500">{format(new Date(row.dispensedAt), 'HH:mm')}</div>
+          <div className="font-medium">{format(new Date(row.createdAt), 'MMM dd, yyyy')}</div>
+          <div className="text-sm text-gray-500">{format(new Date(row.createdAt), 'HH:mm')}</div>
         </div>
       ),
     },
     {
-      key: 'product' as keyof DispenseRecord,
+      key: 'product' as keyof TransferRecord,
       header: 'Product',
       sortable: true,
       filterable: true,
       width: 200,
-      render: (value: any, row: DispenseRecord) => (
+      render: (value: any, row: TransferRecord) => (
         <div>
           <div className="font-medium">{row.inventory.product.name}</div>
           <div className="text-sm text-gray-500">
@@ -326,47 +362,62 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
       ),
     },
     {
-      key: 'location' as keyof DispenseRecord,
-      header: 'Location',
+      key: 'sourceLocation' as keyof TransferRecord,
+      header: 'From',
       sortable: true,
       filterable: true,
       width: 150,
-      render: (value: any, row: DispenseRecord) => (
+      render: (value: any, row: TransferRecord) => (
         <div>
-          <div className="font-medium">{row.inventory.Location?.name || 'No location'}</div>
-          {row.inventory.subLocation && (
-            <div className="text-sm text-gray-500">{row.inventory.subLocation.name}</div>
+          <div className="font-medium">{row.sourceLocation.name}</div>
+          {row.sourceSubLocation && (
+            <div className="text-sm text-gray-500">{row.sourceSubLocation.name}</div>
           )}
         </div>
       ),
     },
     {
-      key: 'quantity' as keyof DispenseRecord,
+      key: 'destLocation' as keyof TransferRecord,
+      header: 'To',
+      sortable: true,
+      filterable: true,
+      width: 150,
+      render: (value: any, row: TransferRecord) => (
+        <div>
+          <div className="font-medium">{row.destLocation.name}</div>
+          {row.destSubLocation && (
+            <div className="text-sm text-gray-500">{row.destSubLocation.name}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'quantity' as keyof TransferRecord,
       header: 'Quantity',
       sortable: true,
       filterable: true,
       width: 100,
-      render: (value: any, row: DispenseRecord) => (
-        <span className="font-medium text-red-600">-{row.quantity}</span>
+      render: (value: any, row: TransferRecord) => (
+        <span className="font-medium text-blue-600">{row.quantity}</span>
       ),
     },
     {
-      key: 'user' as keyof DispenseRecord,
-      header: 'Dispensed By',
+      key: 'user' as keyof TransferRecord,
+      header: 'Transferred By',
       sortable: true,
       filterable: true,
       width: 150,
-      render: (value: any, row: DispenseRecord) => row.user.email,
+      render: (value: any, row: TransferRecord) => row.user.email,
     },
     {
-      key: 'note' as keyof DispenseRecord,
+      key: 'notes' as keyof TransferRecord,
       header: 'Notes',
       sortable: false,
       filterable: true,
       width: 200,
-      render: (value: any, row: DispenseRecord) => (
+      render: (value: any, row: TransferRecord) => (
         <span className="text-sm text-gray-600">
-          {row.note || 'No notes'}
+          {row.notes || 'No notes'}
         </span>
       ),
     },
@@ -381,7 +432,8 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
   const handleClearFilters = useCallback(() => {
     setFilters({
       search: "",
-      location: "",
+      sourceLocation: "",
+      destLocation: "",
       user: "",
       dateRange: { from: undefined, to: undefined }
     })
@@ -392,21 +444,22 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
     if (!filteredData.length) {
       toast({
         title: "No data to export",
-        description: "There are no dispense records to export.",
+        description: "There are no transfer records to export.",
         variant: "destructive",
       })
       return
     }
 
-    const headers = ['Date', 'Product', 'Lot Number', 'Location', 'Quantity', 'User', 'Notes']
-    const csvData = filteredData.map((d: DispenseRecord) => [
-      format(new Date(d.dispensedAt), 'yyyy-MM-dd HH:mm'),
-      d.inventory.product.name,
-      d.inventory.lotNumber,
-      d.inventory.Location?.name || '',
-      d.quantity,
-      d.user.email,
-      d.note || ''
+    const headers = ['Date', 'Product', 'Lot Number', 'From Location', 'To Location', 'Quantity', 'User', 'Notes']
+    const csvData = filteredData.map((t: TransferRecord) => [
+      format(new Date(t.createdAt), 'yyyy-MM-dd HH:mm'),
+      t.inventory.product.name,
+      t.inventory.lotNumber,
+      t.sourceLocation.name,
+      t.destLocation.name,
+      t.quantity,
+      t.user.email,
+      t.notes || ''
     ])
 
     const csvContent = [headers, ...csvData]
@@ -417,7 +470,7 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `dispense-history-${format(new Date(), 'yyyy-MM-dd')}.csv`
+    link.download = `transfer-history-${format(new Date(), 'yyyy-MM-dd')}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -425,7 +478,7 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
 
     toast({
       title: "Export successful",
-      description: "Dispense history has been exported to CSV.",
+      description: "Transfer history has been exported to CSV.",
     })
   }, [filteredData, toast])
 
@@ -433,9 +486,9 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
     return (
       <div className="text-center py-12">
         <Package className="mx-auto h-12 w-12 text-red-500" />
-        <h3 className="mt-4 text-lg font-medium text-gray-900">Error Loading Dispense History</h3>
+        <h3 className="mt-4 text-lg font-medium text-gray-900">Error Loading Transfer History</h3>
         <p className="mt-2 text-sm text-gray-500">
-          Failed to load dispense records. Please try again.
+          Failed to load transfer records. Please try again.
         </p>
       </div>
     )
@@ -448,19 +501,19 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         <Card className="p-6">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600" />
+              <ArrowRightLeft className="w-6 h-6 text-blue-600" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Dispenses</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalDispenses}</p>
+              <p className="text-sm font-medium text-gray-600">Total Transfers</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalTransfers}</p>
             </div>
           </div>
         </Card>
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <TrendingDown className="w-6 h-6 text-red-600" />
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Package className="w-6 h-6 text-green-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Quantity</p>
@@ -471,8 +524,8 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <DollarSign className="w-6 h-6 text-purple-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Value</p>
@@ -483,8 +536,8 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         
         <Card className="p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Clock className="w-6 h-6 text-purple-600" />
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Clock className="w-6 h-6 text-orange-600" />
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Avg/Day</p>
@@ -498,7 +551,7 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            Dispense History ({filteredData.length})
+            Transfer History ({filteredData.length})
           </h2>
         </div>
         <div className="flex items-center space-x-3">
@@ -518,7 +571,8 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         filters={filters}
         onFilterChange={handleFilterChange}
         onClearFilters={handleClearFilters}
-        locations={filterOptions.locations}
+        sourceLocations={filterOptions.sourceLocations}
+        destLocations={filterOptions.destLocations}
         users={filterOptions.users}
       />
 
@@ -532,9 +586,9 @@ export function DispenseHistoryContent({ user }: DispenseHistoryContentProps) {
         filterable={false} // We have our own filters
         selectable={true}
         loading={isLoading}
-        emptyMessage="No dispense records found. Try adjusting your filters."
+        emptyMessage="No transfer records found. Try adjusting your filters."
         className="w-full"
       />
     </div>
   )
-} 
+}

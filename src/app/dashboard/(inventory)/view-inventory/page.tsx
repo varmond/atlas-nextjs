@@ -22,7 +22,7 @@ export default async function ViewInventoryPage() {
     return redirect("/welcome")
   }
 
-  // Fetch inventory items for server rendering
+  // Fetch inventory items with related data for server rendering
   const inventoryItems = await db.inventory.findMany({
     where: { organizationId: user.organizationId ?? "" },
     include: {
@@ -30,6 +30,17 @@ export default async function ViewInventoryPage() {
         select: {
           name: true,
           sku: true,
+        },
+      },
+      Location: {
+        select: {
+          name: true,
+        },
+      },
+      subLocation: {
+        select: {
+          name: true,
+          code: true,
         },
       },
     },
@@ -44,7 +55,11 @@ export default async function ViewInventoryPage() {
   }))
 
   return (
-    <DashboardPage title="Inventory" hideBackButton={true}>
+    <DashboardPage 
+      title="Inventory" 
+      subtitle="View and manage your inventory items"
+      hideBackButton={true}
+    >
       <ViewInventoryPageContent initialInventory={serializedInventory} />
     </DashboardPage>
   )

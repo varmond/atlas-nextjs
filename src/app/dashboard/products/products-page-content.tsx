@@ -1,317 +1,332 @@
 "use client"
 
+import { useState, useMemo, useCallback, memo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input" // Added Input component
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { DataTable } from "@/components/ui/data-table"
+import { CreateProductModal } from "@/components/create-product-modal"
 import { client } from "@/lib/client"
 import { useQuery } from "@tanstack/react-query"
 import {
-  ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  getPaginationRowModel,
-  SortingState,
-  getSortedRowModel,
-  ColumnFiltersState, // Added for filtering
-  getFilteredRowModel, // Added for filtering
-} from "@tanstack/react-table"
-import { ArrowUpDown, Eye, Package, Search } from "lucide-react" // Added Search icon
+  Package,
+  Search,
+  Plus,
+  Eye,
+  Edit,
+  Trash2,
+  DollarSign,
+  Tag,
+  Building2,
+} from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { LoadingSpinner } from "@/components/loading-spinner"
-import { Products } from "@prisma/client"
+import { useToast } from "@/hooks/use-toast"
 
-export const ProductsPageContent = () => {
-  // State for table sorting and filtering
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [searchQuery, setSearchQuery] = useState("")
+interface Product {
+  id: string
+  name: string
+  sku: string
+  itemCode: string
+  price: number
+  packageCost: number
+  type: string
+  packageUOM: string
+  containerUOM: string
+  quantityPerContainer: number
+  unitUOM: string
+  unitQuantity: number
+  manufacturerBarcodeNumber?: string
+  createdAt: string
+  updatedAt: string
+}
 
-  // Query to fetch products
-  const { data, isPending: isProductsLoading } = useQuery({
-    queryKey: ["user-products"],
-    queryFn: async () => {
-      // In a real implementation, this would be a call to your API
-      const res = await client.product.getProducts.$get()
-      return await res.json()
-    },
-  })
-
-  // Handle search input change
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearchQuery(value)
-
-    // Apply global filter across multiple columns
-    if (value) {
-      setColumnFilters([
-        {
-          id: "name",
-          value: value,
-        },
-      ])
-    } else {
-      setColumnFilters([])
-    }
+// Memoized product type badge component
+const ProductTypeBadge = memo(({ type }: { type: string }) => {
+  const colorMap = {
+    MEDICATION: "bg-blue-50 text-blue-700 border-blue-200",
+    IMMUNIZATION: "bg-green-50 text-green-700 border-green-200",
+    GENERAL: "bg-gray-50 text-gray-700 border-gray-200",
+    CUSTOM: "bg-purple-50 text-purple-700 border-purple-200",
   }
 
-  // Define table columns
-  const columns: ColumnDef<Products>[] = [
+  const labelMap = {
+    MEDICATION: "Medication",
+    IMMUNIZATION: "Immunization", 
+    GENERAL: "General",
+    CUSTOM: "Custom",
+  }
+
+  return (
+    <Badge variant="outline" className={colorMap[type as keyof typeof colorMap] || colorMap.GENERAL}>
+      {labelMap[type as keyof typeof labelMap] || type}
+    </Badge>
+  )
+})
+
+ProductTypeBadge.displayName = "ProductTypeBadge"
+
+// Memoized action buttons component
+const ActionButtons = memo(({ product }: { product: Product }) => (
+  <div className="flex items-center space-x-2">
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      title="View Details"
+      asChild
+    >
+      <Link href={`/dashboard/products/${product.id}`}>
+        <Eye className="h-4 w-4" />
+      </Link>
+    </Button>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      title="Edit Product"
+      asChild
+    >
+      <Link href={`/dashboard/products/${product.id}?edit=true`}>
+        <Edit className="h-4 w-4" />
+      </Link>
+    </Button>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+      title="Delete Product"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+  </div>
+))
+
+ActionButtons.displayName = "ActionButtons"
+
+export function ProductsPageContent() {
+  const { toast } = useToast()
+
+  // Query to fetch products
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const response = await client.product.getProducts.$get()
+      const data = await response.json()
+      return data.products || []
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+
+  // Memoized statistics
+  const stats = useMemo(() => {
+    if (!data) return { totalProducts: 0, totalValue: '0.00', byType: {} }
+
+    const totalProducts = data.length
+    const totalValue = data.reduce((sum: number, product: Product) => {
+      // Ensure price is a number and handle null/undefined
+      const price = typeof product.price === 'number' ? product.price : 0
+      return sum + price
+    }, 0)
+
+    const byType = data.reduce((acc: Record<string, number>, product: Product) => {
+      acc[product.type] = (acc[product.type] || 0) + 1
+      return acc
+    }, {})
+
+    return {
+      totalProducts,
+      totalValue: totalValue.toFixed(2),
+      byType
+    }
+  }, [data])
+
+  // Memoized table columns
+  const columns = useMemo(() => [
     {
-      accessorKey: "name",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Name
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("name")}</div>
+      key: 'name' as keyof Product,
+      header: 'Product Name',
+      sortable: true,
+      filterable: true,
+      width: 200,
+      render: (value: any, row: Product) => (
+        <div>
+          <div className="font-medium">{row.name}</div>
+          <div className="text-sm text-gray-500">{row.itemCode}</div>
+        </div>
       ),
     },
     {
-      accessorKey: "sku",
-      header: "SKU",
-      cell: ({ row }) => <div>{row.getValue("sku") || "N/A"}</div>,
+      key: 'sku' as keyof Product,
+      header: 'SKU',
+      sortable: true,
+      filterable: true,
+      width: 120,
+      render: (value: any, row: Product) => (
+        <span className="font-mono text-sm">{row.sku || 'N/A'}</span>
+      ),
     },
     {
-      accessorKey: "price",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Price
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => <div>${row.getValue("price") || "0.00"}</div>,
+      key: 'type' as keyof Product,
+      header: 'Type',
+      sortable: true,
+      filterable: true,
+      width: 120,
+      render: (value: any, row: Product) => <ProductTypeBadge type={row.type} />,
     },
     {
-      accessorKey: "type",
-      header: "Type",
-      cell: ({ row }) => <div>{row.getValue("type")}</div>,
+      key: 'price' as keyof Product,
+      header: 'Price',
+      sortable: true,
+      filterable: true,
+      width: 100,
+      render: (value: any, row: Product) => (
+        <span className="font-medium">
+          ${typeof row.price === "number" ? row.price.toFixed(2) : '0.00'}
+        </span>
+      ),
     },
     {
-      accessorKey: "createdAt",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Date Added
-            <ArrowUpDown className="ml-2 size-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => {
-        return new Date(row.getValue("createdAt")).toLocaleDateString()
-      },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        return (
-          <Link
-            href={`/dashboard/products/${encodeURIComponent(row.original.id)}`}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center gap-1"
-            >
-              <Eye className="size-4" />
-              View
-            </Button>
-          </Link>
-        )
-      },
-    },
-  ]
-
-  // Custom filter function to search across multiple fields
-  const fuzzyFilter = (row: any, columnId: string, filterValue: string) => {
-    const value = row.getValue(columnId)
-    if (!value) return false
-    return String(value).toLowerCase().includes(filterValue.toLowerCase())
-  }
-
-  // Set up table with data and filtering
-  const table = useReactTable({
-    data: data?.products || [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    getFilteredRowModel: getFilteredRowModel(),
-    filterFns: {
-      fuzzy: fuzzyFilter,
-    },
-    state: {
-      sorting,
-      columnFilters,
-    },
-  })
-
-  // Global filter function to search across multiple columns
-  const filterProducts = (products: Products[]) => {
-    if (!searchQuery) return products
-
-    return products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(product.type).toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  }
-
-  // Show loading state
-  if (isProductsLoading) {
-    return (
-      <div className="flex items-center justify-center h-full w-full">
-        <LoadingSpinner />
-      </div>
-    )
-  }
-
-  // Show empty state if no products
-  if (!data?.products || data.products.length === 0) {
-    return (
-      <Card className="flex flex-col items-center justify-center rounded-2xl flex-1 text-center p-6">
-        <div className="flex justify-center w-full">
-          <Package className="size-24 text-gray-300" />
+      key: 'packageUOM' as keyof Product,
+      header: 'Package Unit',
+      sortable: true,
+      filterable: true,
+      width: 120,
+      render: (value: any, row: Product) => (
+        <div>
+          <div>{row.quantityPerContainer} {row.packageUOM}</div>
+          <div className="text-xs text-gray-500">per {row.containerUOM}</div>
         </div>
-        <h1 className="mt-6 text-xl/8 font-medium tracking-tight text-gray-900">
-          No Products Yet
-        </h1>
-        <p className="text-sm/6 text-gray-600 max-w-prose mt-2 mb-8">
-          Start managing your inventory by adding your first product
+      ),
+    },
+    {
+      key: 'createdAt' as keyof Product,
+      header: 'Created',
+      sortable: true,
+      filterable: true,
+      width: 120,
+      render: (value: any, row: Product) => 
+        new Date(row.createdAt).toLocaleDateString(),
+    },
+    {
+      key: 'actions' as keyof Product,
+      header: 'Actions',
+      sortable: false,
+      filterable: false,
+      width: 100,
+      render: (value: any, row: Product) => <ActionButtons product={row} />,
+    },
+  ], [])
+
+  // Memoized row click handler
+  const handleRowClick = useCallback((product: Product) => {
+    // Navigate to product detail page
+    window.location.href = `/dashboard/products/${product.id}`
+  }, [])
+
+  // Memoized selection change handler
+  const handleSelectionChange = useCallback((selectedProducts: Product[]) => {
+    console.log('Selected products:', selectedProducts)
+  }, [])
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <Package className="mx-auto h-12 w-12 text-red-500" />
+        <h3 className="mt-4 text-lg font-medium text-gray-900">Error Loading Products</h3>
+        <p className="mt-2 text-sm text-gray-500">
+          Failed to load products. Please try again.
         </p>
-
-        <Link href="/dashboard/add-inventory">
-          <Button className="flex items-center space-x-2">
-            <span className="size-5">✨</span>
-            <span>Add Product</span>
-          </Button>
-        </Link>
-      </Card>
+      </div>
     )
   }
 
-  // Render products table with search
   return (
-    <div className="space-y-4">
-      {/* Search input */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-          <Input
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={handleSearch}
-            className="pl-9"
-          />
-        </div>
-        {/* <Link href="/dashboard/add-inventory">
-          <Button>Add Product</Button>
-        </Link> */}
-      </div>
-
-      <Card contentClassName="px-6 py-4">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  {searchQuery
-                    ? "No products found matching your search."
-                    : "No products found."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      <div className="flex items-center justify-between py-4">
-        <div className="text-sm text-gray-500">
-          {table.getFilteredRowModel().rows.length} products found
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant={"outline"}
-            size={"sm"}
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <div className="text-sm px-2">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+    <div className="space-y-6">
+      {/* Header Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Package className="w-6 h-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Products</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+            </div>
           </div>
-          <Button
-            variant={"outline"}
-            size={"sm"}
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <DollarSign className="w-6 h-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Total Value</p>
+              <p className="text-2xl font-bold text-gray-900">${stats.totalValue}</p>
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Tag className="w-6 h-6 text-purple-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Product Types</p>
+              <p className="text-2xl font-bold text-gray-900">{Object.keys(stats.byType).length}</p>
+            </div>
+          </div>
+        </Card>
+        
+        <Card className="p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <Building2 className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Active Products</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Actions Bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Products ({data?.length || 0})
+          </h2>
+        </div>
+        <div className="flex items-center space-x-3">
+          <CreateProductModal>
+            <Button className="flex items-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>Add Product</span>
+            </Button>
+          </CreateProductModal>
         </div>
       </div>
+
+      {/* Data Table */}
+      <DataTable
+        data={data || []}
+        columns={columns}
+        pageSize={25}
+        searchable={true}
+        sortable={true}
+        filterable={true}
+        selectable={true}
+        onRowClick={handleRowClick}
+        onSelectionChange={handleSelectionChange}
+        loading={isLoading}
+        emptyMessage="No products found. Create your first product to get started."
+        className="w-full"
+      />
     </div>
   )
 }

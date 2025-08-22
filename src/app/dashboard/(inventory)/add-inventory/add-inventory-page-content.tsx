@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
-import { CalendarIcon, Loader2, Plus, Trash2, QrCode } from "lucide-react"
+import { CalendarIcon, Loader2, Plus, Trash2, QrCode, Package } from "lucide-react"
 import { format } from "date-fns"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { client } from "@/lib/client"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -352,11 +353,22 @@ export function AddInventoryPageContent({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {productsData?.products?.map((product: Product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name} - {product.sku}
-                            </SelectItem>
-                          ))}
+                          {productsData?.products && productsData.products.length > 0 ? (
+                            productsData.products.map((product: Product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                {product.name} - {product.sku}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <>
+                              <SelectItem value="no-products" disabled>
+                                No products available
+                              </SelectItem>
+                              <SelectItem value="create-product" className="text-blue-600">
+                                + Create your first product
+                              </SelectItem>
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                       <Button 
@@ -370,6 +382,22 @@ export function AddInventoryPageContent({
                       </Button>
                     </div>
                     <FormMessage />
+                    {(!productsData?.products || productsData.products.length === 0) && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start space-x-2">
+                          <Package className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm">
+                            <p className="text-blue-800 font-medium">No products found</p>
+                            <p className="text-blue-600">
+                              You need to create products first before adding inventory. 
+                              <Link href="/dashboard/products" className="text-blue-700 underline ml-1">
+                                Go to Products →
+                              </Link>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </FormItem>
                 )}
               />

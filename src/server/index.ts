@@ -14,6 +14,7 @@ import { purchaseOrderRouter } from "./routers/purchase-order-router"
 import { vendorRouter } from "./routers/vendor-router"
 import { subLocationRouter } from "./routers/sub-location-router"
 import { dispenseRouter } from "./routers/dispense-router"
+import { transferRouter } from "./routers/transfer-router"
 import { membershipRouter } from "./routers/membership-router"
 import { organizationRouter } from "./routers/organization-router"
 
@@ -38,6 +39,7 @@ const appRouter = app
   .route("/vendor", vendorRouter)
   .route("/sub-location", subLocationRouter)
   .route("/dispense", dispenseRouter)
+  .route("/transfer", transferRouter)
   .route("/membership", membershipRouter)
   .route("/organization", organizationRouter)
 
