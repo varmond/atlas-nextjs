@@ -3,13 +3,15 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 export const transferRouter = router({
   getTransfers: privateProcedure.query(async ({ c, ctx }) => {
     try {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const transfers = await db.inventoryTransfer.findMany({
         where: { 
-          organizationId: ctx.user.organizationId ?? "" 
+          organizationId,
         },
         include: {
           inventory: {
@@ -70,11 +72,12 @@ export const transferRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        const organizationId = requireActiveOrganizationId(ctx.user)
         // Check if source has enough quantity
         const sourceInventory = await db.inventory.findFirst({
           where: {
             id: input.inventoryId,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
           }
         })
 
@@ -106,7 +109,7 @@ export const transferRouter = router({
               inventoryId: input.inventoryId,
               notes: input.notes,
               userId: ctx.user.id,
-              organizationId: ctx.user.organizationId ?? "",
+              organizationId,
             }
           })
         ])

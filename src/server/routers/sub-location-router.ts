@@ -3,6 +3,7 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 export const subLocationRouter = router({
   getSubLocations: privateProcedure
@@ -10,10 +11,11 @@ export const subLocationRouter = router({
       locationId: z.string(),
     }))
     .query(async ({ c, input, ctx }) => {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const subLocations = await db.subLocation.findMany({
         where: {
           locationId: input.locationId,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
         orderBy: { name: "asc" },
       })
@@ -28,12 +30,13 @@ export const subLocationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        const organizationId = requireActiveOrganizationId(ctx.user)
         const subLocation = await db.subLocation.create({
           data: {
             name: input.name,
             code: input.code,
             locationId: input.locationId,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
           },
         })
         return c.json({ success: true, subLocation })

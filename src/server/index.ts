@@ -17,6 +17,7 @@ import { dispenseRouter } from "./routers/dispense-router"
 import { transferRouter } from "./routers/transfer-router"
 import { membershipRouter } from "./routers/membership-router"
 import { organizationRouter } from "./routers/organization-router"
+import { adminRouter } from "./routers/admin-router"
 
 const app = new Hono().basePath("/api").use(cors())
 
@@ -42,6 +43,7 @@ const appRouter = app
   .route("/transfer", transferRouter)
   .route("/membership", membershipRouter)
   .route("/organization", organizationRouter)
+  .route("/admin", adminRouter)
 
 // The handler Next.js uses to answer API requests
 export const httpHandler = handle(app)

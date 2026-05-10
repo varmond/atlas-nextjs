@@ -10,6 +10,7 @@ import { resend } from "@/lib/resend"
 import { readFile } from "fs/promises"
 import path from "path"
 import { generatePDF } from "@/lib/pdf"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1, "Product is required"),
@@ -35,9 +36,10 @@ const createPurchaseOrderSchema = z.object({
 export const purchaseOrderRouter = router({
   getPurchaseOrders: privateProcedure.query(async ({ c, ctx }) => {
     try {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const purchaseOrders = await db.purchaseOrder.findMany({
         where: { 
-          organizationId: ctx.user.organizationId ?? "" 
+          organizationId,
         },
         include: {
           vendor: true,
@@ -54,6 +56,7 @@ export const purchaseOrderRouter = router({
       return c.json({ purchaseOrders })
     } catch (error) {
       console.error('Error fetching purchase orders:', error)
+      if (error instanceof HTTPException) throw error
       throw new HTTPException(500, { message: "Failed to fetch purchase orders" })
     }
   }),
@@ -62,10 +65,11 @@ export const purchaseOrderRouter = router({
     .input(createPurchaseOrderSchema)
     .mutation(async ({ c, ctx, input }) => {
       const { vendorId, locationId, notes } = input
+      const organizationId = requireActiveOrganizationId(ctx.user)
 
       // Get the latest PO number
       const latestPO = await db.purchaseOrder.findFirst({
-        where: { organizationId: ctx.user.organizationId ?? "" },
+        where: { organizationId },
         orderBy: { orderNumber: 'desc' },
         select: { orderNumber: true },
       })
@@ -80,7 +84,7 @@ export const purchaseOrderRouter = router({
           locationId,
           notes,
           status: "DRAFT",
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
           userId: ctx.user.id,
         },
         include: {
@@ -95,10 +99,11 @@ export const purchaseOrderRouter = router({
   getPurchaseOrder: privateProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ c, ctx, input }) => {
-      const purchaseOrder = await db.purchaseOrder.findUnique({
+      const organizationId = requireActiveOrganizationId(ctx.user)
+      const purchaseOrder = await db.purchaseOrder.findFirst({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
         include: {
           vendor: true,
@@ -125,12 +130,17 @@ export const purchaseOrderRouter = router({
     }))
     .mutation(async ({ c, ctx, input }) => {
       const { purchaseOrderId, items } = input
+      const organizationId = requireActiveOrganizationId(ctx.user)
+
+      const existing = await db.purchaseOrder.findFirst({
+        where: { id: purchaseOrderId, organizationId },
+      })
+      if (!existing) {
+        throw new HTTPException(404, { message: "Purchase order not found" })
+      }
 
       const purchaseOrder = await db.purchaseOrder.update({
-        where: {
-          id: purchaseOrderId,
-          organizationId: ctx.user.organizationId ?? "",
-        },
+        where: { id: purchaseOrderId },
         data: {
           items: {
             create: items.map(item => ({
@@ -160,12 +170,17 @@ export const purchaseOrderRouter = router({
       try {
         // Start transaction
         return await db.$transaction(async (tx) => {
+          const organizationId = requireActiveOrganizationId(ctx.user)
+          const po = await tx.purchaseOrder.findFirst({
+            where: { id: input.id, organizationId },
+          })
+          if (!po) {
+            throw new HTTPException(404, { message: "Purchase order not found" })
+          }
+
           // Get purchase order with all related data
           const purchaseOrder = await tx.purchaseOrder.update({
-            where: {
-              id: input.id,
-              organizationId: ctx.user.organizationId ?? "",
-            },
+            where: { id: input.id },
             data: {
               status: "POSTED",
             },

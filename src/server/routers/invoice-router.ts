@@ -3,6 +3,7 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 const invoiceItemSchema = z.object({
   productId: z.string().min(1, "Product is required"),
@@ -22,8 +23,9 @@ const invoiceSchema = z.object({
 export const invoiceRouter = router({
   // Get all invoices
   getInvoices: privateProcedure.query(async ({ c, ctx }) => {
+    const organizationId = requireActiveOrganizationId(ctx.user)
     const invoices = await db.invoice.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
+      where: { organizationId },
       select: {
         id: true,
         invoiceNumber: true,
@@ -63,10 +65,11 @@ export const invoiceRouter = router({
   getInvoice: privateProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ c, ctx, input }) => {
-      const invoice = await db.invoice.findUnique({
+      const organizationId = requireActiveOrganizationId(ctx.user)
+      const invoice = await db.invoice.findFirst({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
         select: {
           id: true,
@@ -106,10 +109,11 @@ export const invoiceRouter = router({
     .input(invoiceSchema)
     .mutation(async ({ c, ctx, input }) => {
       const { patientId, locationId, items, notes } = input
+      const organizationId = requireActiveOrganizationId(ctx.user)
 
       // Get the latest invoice number
       const latestInvoice = await db.invoice.findFirst({
-        where: { organizationId: ctx.user.organizationId ?? "" },
+        where: { organizationId },
         orderBy: { invoiceNumber: 'desc' },
         select: { invoiceNumber: true },
       })
@@ -124,7 +128,7 @@ export const invoiceRouter = router({
           locationId,
           notes,
           status: "DRAFT",
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
           userId: ctx.user.id,
           items: {
             create: items.map(item => ({
@@ -151,11 +155,12 @@ export const invoiceRouter = router({
     .mutation(async ({ c, ctx, input }) => {
       // Start transaction
       return await db.$transaction(async (tx) => {
+        const organizationId = requireActiveOrganizationId(ctx.user)
         // Get invoice with items
-        const invoice = await tx.invoice.findUnique({
+        const invoice = await tx.invoice.findFirst({
           where: {
             id: input.id,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
           },
           include: {
             items: true,
@@ -172,8 +177,8 @@ export const invoiceRouter = router({
 
         // Update inventory for each item
         for (const item of invoice.items) {
-          const inventory = await tx.inventory.findUnique({
-            where: { id: item.inventoryId },
+          const inventory = await tx.inventory.findFirst({
+            where: { id: item.inventoryId, organizationId },
           })
 
           if (!inventory) {
@@ -223,12 +228,17 @@ export const invoiceRouter = router({
     }))
     .mutation(async ({ c, ctx, input }) => {
       const { invoiceId, items } = input
+      const organizationId = requireActiveOrganizationId(ctx.user)
+
+      const existing = await db.invoice.findFirst({
+        where: { id: invoiceId, organizationId },
+      })
+      if (!existing) {
+        throw new HTTPException(404, { message: "Invoice not found" })
+      }
 
       const invoice = await db.invoice.update({
-        where: {
-          id: invoiceId,
-          organizationId: ctx.user.organizationId ?? "",
-        },
+        where: { id: invoiceId },
         data: {
           items: {
             create: items.map(item => ({

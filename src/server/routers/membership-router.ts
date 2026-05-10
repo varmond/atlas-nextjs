@@ -3,6 +3,7 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 export const membershipRouter = router({
   createTier: privateProcedure
@@ -21,13 +22,14 @@ export const membershipRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        const organizationId = requireActiveOrganizationId(ctx.user)
         const tier = await db.membershipTier.create({
           data: {
             name: input.name,
             description: input.description,
             price: input.price,
             frequency: input.frequency,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
             benefits: {
               create: input.benefits,
             },
@@ -40,15 +42,17 @@ export const membershipRouter = router({
         return c.json({ success: true, tier })
       } catch (error) {
         console.error("Error creating membership tier:", error)
+        if (error instanceof HTTPException) throw error
         throw new HTTPException(500, { message: "Failed to create membership tier" })
       }
     }),
 
   getTiers: privateProcedure.query(async ({ c, ctx }) => {
     try {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const tiers = await db.membershipTier.findMany({
         where: { 
-          organizationId: ctx.user.organizationId ?? "" 
+          organizationId,
         },
         include: {
           benefits: true,
@@ -65,6 +69,7 @@ export const membershipRouter = router({
       return c.json({ tiers })
     } catch (error) {
       console.error("Error fetching membership tiers:", error)
+      if (error instanceof HTTPException) throw error
       throw new HTTPException(500, { message: "Failed to fetch membership tiers" })
     }
   }),

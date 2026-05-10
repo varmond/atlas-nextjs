@@ -3,13 +3,15 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 export const dispenseRouter = router({
   getDispenses: privateProcedure.query(async ({ c, ctx }) => {
     try {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const dispenses = await db.inventoryDispense.findMany({
         where: { 
-          organizationId: ctx.user.organizationId ?? "" 
+          organizationId,
         },
         include: {
           inventory: {
@@ -57,10 +59,11 @@ export const dispenseRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
+        const organizationId = requireActiveOrganizationId(ctx.user)
         const inventory = await db.inventory.findFirst({
           where: { 
             id: input.inventoryId,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId,
           }
         })
 
@@ -86,7 +89,7 @@ export const dispenseRouter = router({
               note: input.note,
               dispensedAt: input.dispensedAt ? new Date(input.dispensedAt) : new Date(),
               userId: ctx.user.id,
-              organizationId: ctx.user.organizationId ?? "",
+              organizationId,
             }
           })
         ])

@@ -3,7 +3,12 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
-import { shouldGrantSuperAdmin, isSuperAdmin } from "@/lib/super-admin"
+import { shouldGrantSuperAdmin } from "@/lib/super-admin"
+import { sendClerkInvitation } from "@/lib/clerk-invite"
+import {
+  findOrCreatePendingUserByEmail,
+  normalizeEmail,
+} from "@/lib/pending-user"
 
 async function checkSuperAdmin(email: string, role: string): Promise<boolean> {
   // Check if user should be granted super admin access
@@ -23,35 +28,38 @@ export const organizationRouter = router({
   // Simple version that works with current schema
   getUserOrganizations: privateProcedure.query(async ({ c, ctx }) => {
     try {
-      // Get all organizations the user belongs to
-      const organizations = await db.organization.findMany({
+      // Get all organizations the user belongs to via UserOrganization
+      const userOrganizations = await db.userOrganization.findMany({
         where: {
-          users: {
-            some: {
-              id: ctx.user.id
+          userId: ctx.user.id,
+          isActive: true
+        },
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              subscriptionStatus: true,
+              planType: true,
             }
           }
         },
-        select: {
-          id: true,
-          name: true,
-          subscriptionStatus: true,
-          planType: true,
-        },
         orderBy: {
-          name: 'asc'
+          organization: {
+            name: 'asc'
+          }
         }
       })
 
-      // Convert to user-organization format for consistency
-      const userOrgs = organizations.map(org => ({
-        id: `user-org-${ctx.user.id}-${org.id}`,
-        userId: ctx.user.id,
-        organizationId: org.id,
-        role: 'OWNER', // For now, assume owner role
-        isActive: true,
-        joinedAt: new Date(),
-        organization: org
+      // Convert to the expected format
+      const userOrgs = userOrganizations.map(userOrg => ({
+        id: userOrg.id,
+        userId: userOrg.userId,
+        organizationId: userOrg.organizationId,
+        role: userOrg.role,
+        isActive: userOrg.isActive,
+        joinedAt: userOrg.joinedAt,
+        organization: userOrg.organization
       }))
 
       return c.json({ organizations: userOrgs })
@@ -66,15 +74,15 @@ export const organizationRouter = router({
       const user = await db.user.findUnique({
         where: { id: ctx.user.id },
         include: {
-          organization: true
+          currentOrganization: true
         }
       })
 
-      if (!user?.organization) {
+      if (!user?.currentOrganization) {
         throw new HTTPException(404, { message: "No organization found" })
       }
 
-      return c.json({ organization: user.organization })
+      return c.json({ organization: user.currentOrganization })
     } catch (error) {
       console.error("Error fetching current organization:", error)
       throw new HTTPException(500, { message: "Failed to fetch current organization" })
@@ -88,19 +96,30 @@ export const organizationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
-        // Check if user belongs to this organization
-        const user = await db.user.findUnique({
-          where: { id: ctx.user.id },
+        // Check if user belongs to this organization via UserOrganization
+        const userOrg = await db.userOrganization.findFirst({
+          where: { 
+            userId: ctx.user.id,
+            organizationId: input.organizationId,
+            isActive: true
+          },
           include: { organization: true }
         })
 
-        if (!user?.organization || user.organization.id !== input.organizationId) {
+        if (!userOrg) {
           throw new HTTPException(403, { message: "Access denied to this organization" })
         }
 
+        // Update user's current organization
+        await db.user.update({
+          where: { id: ctx.user.id },
+          data: { currentOrganizationId: input.organizationId }
+        })
+
         return c.json({ 
           success: true, 
-          organization: user.organization 
+          organization: userOrg.organization,
+          role: userOrg.role
         })
       } catch (error) {
         console.error("Error switching organization:", error)
@@ -127,26 +146,22 @@ export const organizationRouter = router({
           throw new HTTPException(403, { message: "Only super admins can create organizations" })
         }
 
-        // Find the nredd257@gmail.com user
-        const nreddUser = await db.user.findUnique({
-          where: { email: 'nredd257@gmail.com' },
-          select: { id: true }
-        })
-
-        // Create new organization with both users
+        // Create new organization
         const organization = await db.organization.create({
           data: {
             name: input.name,
             subscriptionStatus: 'ACTIVE',
             planType: 'FREE',
-            // Add the current user to this organization
-            users: {
-              connect: [
-                { id: ctx.user.id },
-                // Also add nredd257@gmail.com if found
-                ...(nreddUser ? [{ id: nreddUser.id }] : [])
-              ]
-            }
+          }
+        })
+
+        // Add the current user to this organization via UserOrganization
+        await db.userOrganization.create({
+          data: {
+            userId: ctx.user.id,
+            organizationId: organization.id,
+            role: 'OWNER',
+            isActive: true
           }
         })
 
@@ -158,7 +173,7 @@ export const organizationRouter = router({
             subscriptionStatus: organization.subscriptionStatus,
             planType: organization.planType,
           },
-          message: `Organization created successfully. You can switch to it from the organization selector.${nreddUser ? ' nredd257@gmail.com has also been added to this organization.' : ''}`
+          message: `Organization created successfully. You can switch to it from the organization selector.`,
         })
       } catch (error) {
         console.error("Error creating organization:", error)
@@ -188,16 +203,20 @@ export const organizationRouter = router({
       // Get all organizations with user counts
       const organizations = await db.organization.findMany({
         include: {
-          users: {
-            select: {
-              id: true,
-              email: true,
-              role: true,
+          userOrganizations: {
+            where: { isActive: true },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                }
+              }
             }
           },
           _count: {
             select: {
-              users: true,
+              userOrganizations: true,
               Products: true,
               Inventory: true,
             }
@@ -226,8 +245,7 @@ export const organizationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
-        // Check if user is super admin
-        const user = await db.user.findUnique({
+        const adminUser = await db.user.findUnique({
           where: { id: ctx.user.id },
           select: {
             email: true,
@@ -235,14 +253,56 @@ export const organizationRouter = router({
           }
         })
 
-        if (!user || !(await checkSuperAdmin(user.email, user.role))) {
+        if (!adminUser || !(await checkSuperAdmin(adminUser.email, adminUser.role))) {
           throw new HTTPException(403, { message: "Only super admins can add users to organizations" })
         }
 
-        // For now, just return success - we'll implement this after migration
-        return c.json({ 
-          success: true, 
-          message: "User addition will be available after database migration" 
+        const targetUser = await findOrCreatePendingUserByEmail(input.userEmail)
+
+        const org = await db.organization.findUnique({
+          where: { id: input.organizationId },
+          select: { id: true },
+        })
+        if (!org) {
+          throw new HTTPException(404, { message: "Organization not found" })
+        }
+
+        const existing = await db.userOrganization.findFirst({
+          where: {
+            userId: targetUser.id,
+            organizationId: input.organizationId,
+          },
+        })
+        if (existing) {
+          throw new HTTPException(400, { message: "User is already a member of this practice" })
+        }
+
+        const userOrg = await db.userOrganization.create({
+          data: {
+            userId: targetUser.id,
+            organizationId: input.organizationId,
+            role: input.role,
+            isActive: true,
+          },
+        })
+
+        await db.user.update({
+          where: { id: targetUser.id },
+          data: {
+            currentOrganizationId: input.organizationId,
+            organizationId: input.organizationId,
+          },
+        })
+
+        try {
+          await sendClerkInvitation(normalizeEmail(input.userEmail))
+        } catch (e) {
+          console.error("Clerk invitation failed (membership still created):", e)
+        }
+
+        return c.json({
+          success: true,
+          membership: userOrg,
         })
       } catch (error) {
         console.error("Error adding user to organization:", error)
@@ -265,7 +325,6 @@ export const organizationRouter = router({
           select: {
             email: true,
             role: true,
-            organizationId: true,
           }
         })
 
@@ -273,44 +332,54 @@ export const organizationRouter = router({
           throw new HTTPException(404, { message: "User not found" })
         }
 
+        // Check if user belongs to the organization via UserOrganization
+        const userOrg = await db.userOrganization.findFirst({
+          where: {
+            userId: ctx.user.id,
+            organizationId: input.organizationId,
+            isActive: true
+          }
+        })
+
         // Allow if super admin or if user belongs to the organization
         const isUserSuperAdmin = await checkSuperAdmin(user.email, user.role)
-        const belongsToOrg = user.organizationId === input.organizationId
+        const belongsToOrg = !!userOrg
 
         if (!isUserSuperAdmin && !belongsToOrg) {
           throw new HTTPException(403, { message: "Access denied to organization members" })
         }
 
-        // For now, return the current user as the only member
-        const currentUser = await db.user.findUnique({
-          where: { id: ctx.user.id },
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            createdAt: true,
+        // Get all members of the organization
+        const members = await db.userOrganization.findMany({
+          where: {
+            organizationId: input.organizationId,
+            isActive: true
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                createdAt: true,
+              }
+            }
+          },
+          orderBy: {
+            joinedAt: 'asc'
           }
         })
 
-        if (!currentUser) {
-          return c.json({ members: [] })
-        }
+        const formattedMembers = members.map(member => ({
+          id: member.id,
+          userId: member.userId,
+          organizationId: member.organizationId,
+          role: member.role,
+          isActive: member.isActive,
+          joinedAt: member.joinedAt,
+          user: member.user
+        }))
 
-        const member = {
-          id: `member-${currentUser.id}`,
-          userId: currentUser.id,
-          organizationId: input.organizationId,
-          role: currentUser.role,
-          isActive: true,
-          joinedAt: currentUser.createdAt,
-          user: {
-            id: currentUser.id,
-            email: currentUser.email,
-            createdAt: currentUser.createdAt,
-          }
-        }
-
-        return c.json({ members: [member] })
+        return c.json({ members: formattedMembers })
       } catch (error) {
         console.error("Error fetching organization members:", error)
         if (error instanceof HTTPException) {

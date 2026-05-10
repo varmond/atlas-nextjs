@@ -3,6 +3,7 @@ import { router } from "../__internals/router"
 import { privateProcedure } from "../procedures"
 import { z } from "zod"
 import { HTTPException } from "hono/http-exception"
+import { requireActiveOrganizationId } from "@/lib/active-organization"
 
 const patientSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -13,8 +14,9 @@ const patientSchema = z.object({
 
 export const patientRouter = router({
   getPatients: privateProcedure.query(async ({ c, ctx }) => {
+    const organizationId = requireActiveOrganizationId(ctx.user)
     const patients = await db.patient.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
+      where: { organizationId },
       orderBy: { lastName: "asc" },
       select: {
         id: true,
@@ -31,10 +33,11 @@ export const patientRouter = router({
   getPatient: privateProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ c, ctx, input }) => {
-      const patient = await db.patient.findUnique({
+      const organizationId = requireActiveOrganizationId(ctx.user)
+      const patient = await db.patient.findFirst({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
       })
 
@@ -48,10 +51,11 @@ export const patientRouter = router({
   createPatient: privateProcedure
     .input(patientSchema)
     .mutation(async ({ c, ctx, input }) => {
+      const organizationId = requireActiveOrganizationId(ctx.user)
       const patient = await db.patient.create({
         data: {
           ...input,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
       })
       return c.json({ patient })
@@ -63,12 +67,19 @@ export const patientRouter = router({
       data: patientSchema,
     }))
     .mutation(async ({ c, ctx, input }) => {
-      const patient = await db.patient.update({
+      const organizationId = requireActiveOrganizationId(ctx.user)
+      const result = await db.patient.updateMany({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
         data: input.data,
+      })
+      if (result.count === 0) {
+        throw new HTTPException(404, { message: "Patient not found" })
+      }
+      const patient = await db.patient.findFirst({
+        where: { id: input.id, organizationId },
       })
       return c.json({ patient })
     }),
@@ -76,12 +87,16 @@ export const patientRouter = router({
   deletePatient: privateProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ c, ctx, input }) => {
-      await db.patient.delete({
+      const organizationId = requireActiveOrganizationId(ctx.user)
+      const result = await db.patient.deleteMany({
         where: {
           id: input.id,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId,
         },
       })
+      if (result.count === 0) {
+        throw new HTTPException(404, { message: "Patient not found" })
+      }
       return c.json({ success: true })
     }),
 }) 

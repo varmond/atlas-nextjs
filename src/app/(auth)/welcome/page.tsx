@@ -1,6 +1,6 @@
 "use client"
 
-//sync auth status to db
+// Sync Clerk user → DB (invite / provisioned user only)
 
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { Heading } from "@/components/heading"
@@ -9,17 +9,30 @@ import { useQuery } from "@tanstack/react-query"
 import { client } from "@/lib/client"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { SignOutButton } from "@clerk/nextjs"
+import { Button } from "@/components/ui/button"
+
+type SyncPayload = {
+  isSynced: boolean
+  needsInvitation?: boolean
+  reason?: "no_email" | "not_provisioned" | "no_practice"
+  error?: "account_mismatch"
+}
 
 const Page = () => {
   const router = useRouter()
   const { data } = useQuery({
-    queryFn: async () => {
+    queryFn: async (): Promise<SyncPayload> => {
       const res = await client.auth.getDatabaseSyncStatus.$get()
-      return await res.json()
+      return (await res.json()) as SyncPayload
     },
     queryKey: ["get-database-sync-status"],
     refetchInterval: (query) => {
-      return query.state.data?.isSynced ? false : 1000
+      const d = query.state.data
+      if (!d) return 1000
+      if (d.isSynced) return false
+      if (d.needsInvitation || d.error) return false
+      return 1000
     },
   })
 
@@ -29,16 +42,53 @@ const Page = () => {
     }
   }, [data, router])
 
+  const blocked = Boolean(
+    data &&
+      !data.isSynced &&
+      (data.needsInvitation || data.error === "account_mismatch")
+  )
+
   return (
     <div className="flex w-full flex-1 items-center justify-center px-4">
       <BackgroundPattern className="absolute inset-0 left-1/2 z-0 -translate-x-1/2 opacity-75" />
 
       <div className="relative z-10 flex -translate-y-1/2 flex-col items-center gap-6 text-center">
-        <LoadingSpinner size="md" />
-        <Heading>Creating your account</Heading>
-        <p className="text-base/7 text-gray-600 max-w-prose">
-          Just a moment while we set things up for you
-        </p>
+        {!blocked ? (
+          <>
+            <LoadingSpinner size="md" />
+            <Heading>Connecting your account</Heading>
+            <p className="max-w-prose text-base/7 text-gray-600">
+              Just a moment while we link your sign-in to your practice.
+            </p>
+          </>
+        ) : data?.error === "account_mismatch" ? (
+          <>
+            <Heading>Account conflict</Heading>
+            <p className="max-w-prose text-base/7 text-gray-600">
+              This sign-in does not match the email we have on file. Use the
+              email your administrator invited, or contact support.
+            </p>
+            <SignOutButton>
+              <Button variant="outline" type="button">
+                Sign out
+              </Button>
+            </SignOutButton>
+          </>
+        ) : (
+          <>
+            <Heading>Access is by invitation</Heading>
+            <p className="max-w-prose text-base/7 text-gray-600">
+              {data?.reason === "no_practice"
+                ? "Your account is not assigned to a practice yet. Ask your practice administrator to add you in the admin console."
+                : "We could not find an invitation for this account. Your practice must add your email and send an invite before you can continue."}
+            </p>
+            <SignOutButton>
+              <Button variant="outline" type="button">
+                Sign out
+              </Button>
+            </SignOutButton>
+          </>
+        )}
       </div>
     </div>
   )
