@@ -43,7 +43,7 @@ export const UpgradePageContent = ({ plan }: { plan: Plan }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="border-2 border-brand-700">
+        <Card className="border-2 border-brand-700 [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-sm/6 font-medium">Total events</p>
             <BarChart className="size-4 text-muted-foreground" />
@@ -59,7 +59,7 @@ export const UpgradePageContent = ({ plan }: { plan: Plan }) => {
             </p>
           </div>
         </Card>
-        <Card className="border-2 border-brand-700">
+        <Card className="border-2 border-brand-700 [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <p className="text-sm/6 font-medium">Event Categories</p>
             <BarChart className="size-4 text-muted-foreground" />

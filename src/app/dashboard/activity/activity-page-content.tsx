@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
+import { StandardPageLayout } from "@/components/page-layouts"
 import { format, subDays, startOfDay, endOfDay, isWithinInterval } from "date-fns"
 import {
   Download,
@@ -275,7 +276,7 @@ const FilterPanel = memo(({
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all-types">All Types</SelectItem>
                 <SelectItem value="dispense">Dispense</SelectItem>
                 <SelectItem value="transfer">Transfer</SelectItem>
                 <SelectItem value="add">Add</SelectItem>
@@ -293,7 +294,7 @@ const FilterPanel = memo(({
                 <SelectValue placeholder="All Locations" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Locations</SelectItem>
+                <SelectItem value="all-locations">All Locations</SelectItem>
                 {locations.map((location) => (
                   <SelectItem key={location} value={location}>
                     {location}
@@ -311,7 +312,7 @@ const FilterPanel = memo(({
                 <SelectValue placeholder="All Users" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Users</SelectItem>
+                <SelectItem value="all-users">All Users</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user} value={user}>
                     {user}
@@ -369,9 +370,9 @@ export function ActivityPageContent() {
   const { toast } = useToast()
   const [filters, setFilters] = useState<FilterState>({
     search: '',
-    type: '',
-    location: '',
-    user: '',
+    type: 'all-types',
+    location: 'all-locations',
+    user: 'all-users',
     dateRange: { from: subDays(new Date(), 30), to: new Date() },
   })
 
@@ -455,17 +456,17 @@ export function ActivityPageContent() {
       }
 
       // Type filter
-      if (filters.type && activity.type !== filters.type) {
+      if (filters.type && filters.type !== 'all-types' && activity.type !== filters.type) {
         return false
       }
 
       // Location filter
-      if (filters.location && activity.location !== filters.location) {
+      if (filters.location && filters.location !== 'all-locations' && activity.location !== filters.location) {
         return false
       }
 
       // User filter
-      if (filters.user && activity.user !== filters.user) {
+      if (filters.user && filters.user !== 'all-users' && activity.user !== filters.user) {
         return false
       }
 
@@ -514,9 +515,9 @@ export function ActivityPageContent() {
   const clearFilters = useCallback(() => {
     setFilters({
       search: '',
-      type: '',
-      location: '',
-      user: '',
+      type: 'all-types',
+      location: 'all-locations',
+      user: 'all-users',
       dateRange: { from: subDays(new Date(), 30), to: new Date() },
     })
   }, [])
@@ -530,58 +531,52 @@ export function ActivityPageContent() {
   }, [toast])
 
   return (
-    <div className="space-y-6">
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Activity className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Activities</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalActivities}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <Minus className="w-6 h-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Dispenses</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.dispenses}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <ArrowRight className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Transfers</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.transfers}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Plus className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Additions</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.additions}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
+    <StandardPageLayout
+      title="Activity History"
+      subtitle={`${filteredData.length} activities found`}
+      stats={[
+        {
+          label: "Total Activities",
+          value: stats.totalActivities,
+          icon: <Activity className="w-6 h-6 text-blue-600" />,
+          color: "bg-blue-100"
+        },
+        {
+          label: "Dispenses",
+          value: stats.dispenses,
+          icon: <Minus className="w-6 h-6 text-red-600" />,
+          color: "bg-red-100"
+        },
+        {
+          label: "Transfers",
+          value: stats.transfers,
+          icon: <ArrowRight className="w-6 h-6 text-blue-600" />,
+          color: "bg-blue-100"
+        },
+        {
+          label: "Additions",
+          value: stats.additions,
+          icon: <Plus className="w-6 h-6 text-green-600" />,
+          color: "bg-green-100"
+        }
+      ]}
+      secondaryActions={[
+        {
+          label: "Export CSV",
+          icon: <Download className="w-4 h-4" />,
+          onClick: handleExport,
+          variant: "outline"
+        }
+      ]}
+      searchPlaceholder="Search activities..."
+      searchValue={filters.search}
+      onSearchChange={(value) => handleFilterChange('search', value)}
+      showFilters={true}
+      onFilterToggle={() => {
+        // Toggle filter panel visibility
+      }}
+      activeFiltersCount={Object.values(filters).filter(v => v && v !== 'all-types' && v !== 'all-locations' && v !== 'all-users').length}
+    >
       {/* Filter Panel */}
       <FilterPanel
         filters={filters}
@@ -590,25 +585,6 @@ export function ActivityPageContent() {
         locations={filterOptions.locations}
         users={filterOptions.users}
       />
-
-      {/* Actions Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Activity History ({filteredData.length})
-          </h2>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            onClick={handleExport}
-            className="flex items-center space-x-2"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export CSV</span>
-          </Button>
-        </div>
-      </div>
 
       {/* Activity List */}
       <div className="space-y-4">
@@ -628,6 +604,6 @@ export function ActivityPageContent() {
           </Card>
         )}
       </div>
-    </div>
+    </StandardPageLayout>
   )
 }

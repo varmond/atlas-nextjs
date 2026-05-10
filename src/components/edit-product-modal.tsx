@@ -171,6 +171,8 @@ export const EditProductModal = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product", product.id] })
       queryClient.invalidateQueries({ queryKey: ["user-products"] })
+      queryClient.invalidateQueries({ queryKey: ["inventory-products"] })
+      queryClient.invalidateQueries({ queryKey: ["products"] })
       setShowModal(false)
       setErrorMessage(null)
       onEditComplete?.()

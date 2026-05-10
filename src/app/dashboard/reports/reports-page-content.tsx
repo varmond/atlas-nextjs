@@ -82,21 +82,23 @@ const StatCard = memo(({
   }
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {change && (
-            <p className="text-sm text-gray-500 mt-1">
-              <span className={change.startsWith('+') ? 'text-green-600' : 'text-red-600'}>
-                {change}
-              </span> from last period
-            </p>
-          )}
-        </div>
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
-          <Icon className="w-6 h-6" />
+    <Card className="p-0 border-0 shadow-sm hover:shadow-md transition-shadow [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            {change && (
+              <p className="text-sm text-gray-500 mt-1">
+                <span className={change.startsWith('+') ? 'text-green-600' : 'text-red-600'}>
+                  {change}
+                </span> from last period
+              </p>
+            )}
+          </div>
+          <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
+            <Icon className="w-6 h-6" />
+          </div>
         </div>
       </div>
     </Card>
@@ -115,15 +117,17 @@ const ChartPlaceholder = memo(({
   description: string
   icon: any
 }) => (
-  <Card className="p-6">
-    <div className="flex items-center justify-center h-64 text-center">
-      <div className="space-y-4">
-        <div className="mx-auto w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-          <Icon className="w-6 h-6 text-gray-400" />
-        </div>
-        <div>
-          <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+  <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+    <div className="p-6">
+      <div className="flex items-center justify-center h-64 text-center">
+        <div className="space-y-4">
+          <div className="mx-auto w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+            <Icon className="w-6 h-6 text-gray-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+            <p className="text-sm text-gray-500 mt-1">{description}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -144,9 +148,9 @@ const DataTable = memo(({
     render?: (value: any, row: any) => React.ReactNode
   }>
 }) => (
-  <div className="overflow-x-auto">
-    <table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50">
+  <div className="overflow-x-auto overflow-hidden rounded-lg">
+    <table className="min-w-full">
+      <thead className="bg-gray-50/50">
         <tr>
           {columns.map((column) => (
             <th
@@ -158,9 +162,9 @@ const DataTable = memo(({
           ))}
         </tr>
       </thead>
-      <tbody className="bg-white divide-y divide-gray-200">
+      <tbody className="bg-white">
         {data.map((row, index) => (
-          <tr key={index} className="hover:bg-gray-50">
+          <tr key={index} className="hover:bg-gray-50/50 transition-colors">
             {columns.map((column) => (
               <td key={column.key} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {column.render ? column.render(row[column.key], row) : row[column.key]}
@@ -354,8 +358,9 @@ export function ReportsPageContent() {
             />
           </div>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Top Products by Value</h3>
+          <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Top Products by Value</h3>
             <DataTable
               data={mockReportData.topProducts}
               columns={[
@@ -372,6 +377,7 @@ export function ReportsPageContent() {
                 }
               ]}
             />
+            </div>
           </Card>
         </TabsContent>
 
@@ -396,24 +402,26 @@ export function ReportsPageContent() {
             />
           </div>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Inventory by Location</h3>
-            <DataTable
-              data={mockReportData.activityByLocation}
-              columns={[
-                { key: "location", header: "Location" },
-                { 
-                  key: "items", 
-                  header: "Items",
-                  render: (value) => value.toLocaleString()
-                },
-                { 
-                  key: "value", 
-                  header: "Value",
-                  render: (value) => `$${value.toLocaleString()}`
-                }
-              ]}
-            />
+          <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Inventory by Location</h3>
+              <DataTable
+                data={mockReportData.activityByLocation}
+                columns={[
+                  { key: "location", header: "Location" },
+                  { 
+                    key: "items", 
+                    header: "Items",
+                    render: (value) => value.toLocaleString()
+                  },
+                  { 
+                    key: "value", 
+                    header: "Value",
+                    render: (value) => `$${value.toLocaleString()}`
+                  }
+                ]}
+              />
+            </div>
           </Card>
         </TabsContent>
 
@@ -438,25 +446,27 @@ export function ReportsPageContent() {
             />
           </div>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-            <div className="space-y-4">
-              {Array.from({ length: 10 }, (_, i) => (
-                <div key={i} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      Item dispensed: Product {String.fromCharCode(65 + (i % 5))}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {format(subDays(new Date(), i), "MMM dd, yyyy 'at' HH:mm")} • Location A • User John Doe
-                    </p>
+          <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+              <div className="space-y-4">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <div key={i} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        Item dispensed: Product {String.fromCharCode(65 + (i % 5))}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {format(subDays(new Date(), i), "MMM dd, yyyy 'at' HH:mm")} • Location A • User John Doe
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      Dispense
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="text-xs">
-                    Dispense
-                  </Badge>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </Card>
         </TabsContent>
@@ -482,55 +492,61 @@ export function ReportsPageContent() {
             />
           </div>
 
-          <Card className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Trends</h3>
-            <DataTable
-              data={mockReportData.monthlyTrends}
-              columns={[
-                { key: "month", header: "Month" },
-                { 
-                  key: "items", 
-                  header: "Items",
-                  render: (value) => value.toLocaleString()
-                },
-                { 
-                  key: "value", 
-                  header: "Value",
-                  render: (value) => `$${value.toLocaleString()}`
-                }
-              ]}
-            />
+          <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Monthly Trends</h3>
+              <DataTable
+                data={mockReportData.monthlyTrends}
+                columns={[
+                  { key: "month", header: "Month" },
+                  { 
+                    key: "items", 
+                    header: "Items",
+                    render: (value) => value.toLocaleString()
+                  },
+                  { 
+                    key: "value", 
+                    header: "Value",
+                    render: (value) => `$${value.toLocaleString()}`
+                  }
+                ]}
+              />
+            </div>
           </Card>
         </TabsContent>
 
         {/* Exports Tab */}
         <TabsContent value="exports" className="space-y-6">
-          <Card className="p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Report Exports</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { title: "Inventory Report", description: "Complete inventory listing", icon: Package },
-                { title: "Activity Report", description: "All inventory movements", icon: Activity },
-                { title: "Value Report", description: "Inventory value analysis", icon: DollarSign },
-                { title: "Expiration Report", description: "Items expiring soon", icon: Clock },
-                { title: "Location Report", description: "Inventory by location", icon: BarChart3 },
-                { title: "Custom Report", description: "Build your own report", icon: FileText },
-              ].map((report, index) => (
-                <Card key={index} className="p-4 hover:shadow-md transition-shadow cursor-pointer">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-gray-100 rounded-lg">
-                      <report.icon className="w-5 h-5 text-gray-600" />
+          <Card className="p-0 border-0 shadow-sm [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+            <div className="p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Report Exports</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { title: "Inventory Report", description: "Complete inventory listing", icon: Package },
+                  { title: "Activity Report", description: "All inventory movements", icon: Activity },
+                  { title: "Value Report", description: "Inventory value analysis", icon: DollarSign },
+                  { title: "Expiration Report", description: "Items expiring soon", icon: Clock },
+                  { title: "Location Report", description: "Inventory by location", icon: BarChart3 },
+                  { title: "Custom Report", description: "Build your own report", icon: FileText },
+                ].map((report, index) => (
+                  <Card key={index} className="p-0 border-0 hover:shadow-md transition-shadow cursor-pointer [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
+                    <div className="p-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-gray-100 rounded-lg">
+                          <report.icon className="w-5 h-5 text-gray-600" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-medium text-gray-900">{report.title}</h4>
+                          <p className="text-xs text-gray-500">{report.description}</p>
+                        </div>
+                        <Button variant="ghost" size="sm">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">{report.title}</h4>
-                      <p className="text-xs text-gray-500">{report.description}</p>
-                    </div>
-                    <Button variant="ghost" size="sm">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                ))}
+              </div>
             </div>
           </Card>
         </TabsContent>

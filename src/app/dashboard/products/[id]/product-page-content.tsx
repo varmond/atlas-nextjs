@@ -3,6 +3,7 @@
 import { ProductType, UOM } from "@prisma/client"
 import { useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
+import { ModernPageLayout } from "@/components/page-layouts"
 import {
   ArrowUpDown,
   Package,
@@ -72,12 +73,18 @@ export const ProductPageContent = ({ product }: ProductPageContentProps) => {
   }, [product.price])
 
   return (
-    <div className="space-y-6">
-      {/* Product Header */}
-      {/* <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <EditProductModal product={product} />
-      </div> */}
-
+    <ModernPageLayout
+      title={product.name}
+      description={`${product.type} • ${product.sku}`}
+      actions={
+        <EditProductModal product={product}>
+          <Button>
+            <Edit className="w-4 h-4 mr-2" />
+            Edit Product
+          </Button>
+        </EditProductModal>
+      }
+    >
       <Tabs
         value={activeTab}
         onValueChange={(value) => {
@@ -388,6 +395,6 @@ export const ProductPageContent = ({ product }: ProductPageContentProps) => {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </ModernPageLayout>
   )
 }

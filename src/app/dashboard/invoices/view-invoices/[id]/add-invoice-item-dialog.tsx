@@ -61,7 +61,7 @@ export function AddInvoiceItemDialog({
 
   // Fetch products
   const { data: productsData } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["inventory-products"],
     queryFn: async () => {
       const response = await client.inventory.getProducts.$get()
       return response.json()

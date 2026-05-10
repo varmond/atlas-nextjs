@@ -24,11 +24,16 @@ const authMiddlewae = j.middleware(async ({ c, next }) => {
     const user = await db.user.findUnique({ 
       where: { apiKey },
       include: {
-        organization: true
+        currentOrganization: true,
+        organization: true // Keep legacy for backward compatibility
       }
     })
 
     if (user) {
+      // Ensure organizationId is set for backward compatibility
+      if (!user.organizationId && user.currentOrganizationId) {
+        user.organizationId = user.currentOrganizationId
+      }
       return next({ user })
     }
   }
@@ -42,12 +47,18 @@ const authMiddlewae = j.middleware(async ({ c, next }) => {
   const user = await db.user.findUnique({ 
     where: { externalId: auth.id },
     include: {
-      organization: true
+      currentOrganization: true,
+      organization: true // Keep legacy for backward compatibility
     }
   })
 
   if (!user) {
     throw new HTTPException(401, { message: "Unauthorized" })
+  }
+
+  // Ensure organizationId is set for backward compatibility
+  if (!user.organizationId && user.currentOrganizationId) {
+    user.organizationId = user.currentOrganizationId
   }
 
   return next({ user })

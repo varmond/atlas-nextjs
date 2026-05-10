@@ -137,6 +137,8 @@ export const CreateProductModal = ({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-products"] })
+      queryClient.invalidateQueries({ queryKey: ["inventory-products"] })
+      queryClient.invalidateQueries({ queryKey: ["products"] })
       setIsOpen(false)
       reset()
       router.refresh()

@@ -3,9 +3,6 @@ import { ProductPageContent } from "./product-page-content"
 import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { notFound, redirect } from "next/navigation"
-import { DashboardPage } from "@/components/dashboard-page"
-import { Button } from "@/components/ui/button"
-import { EditProductModal } from "@/components/edit-product-modal"
 
 interface PageProps {
   params: {
@@ -46,20 +43,7 @@ export default async function ProductPage({ params }: PageProps) {
     unitQuantity: product.unitQuantity.toString(),
   }
 
-  return (
-    <DashboardPage
-      title={product.name}
-      cta={
-        <EditProductModal product={serializedProduct}>
-          {/* <Button className="w-full sm:w-fit"> */}
-          {/* <PlusIcon className="size-4 mr-2" /> Add Product */}
-          {/* </Button> */}
-        </EditProductModal>
-      }
-    >
-      <ProductPageContent product={serializedProduct} />
-    </DashboardPage>
-  )
+  return <ProductPageContent product={serializedProduct} />
 }
 
 //<EditProductModal product={product} />

@@ -3,6 +3,7 @@
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
+import { CardPageLayout } from "@/components/page-layouts"
 import { client } from "@/lib/client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
@@ -112,94 +113,75 @@ export const InventoryPageContent = () => {
     return acc
   }, {})
 
+  // Transform data for CardPageLayout
+  const cardItems = Object.entries(itemsByCategory).flatMap(([category, items]) =>
+    items.map((item) => ({
+      id: item.id,
+      title: item.name,
+      subtitle: `SKU: ${item.sku}`,
+      description: `Category: ${category}`,
+      metadata: [
+        {
+          label: "Quantity",
+          value: item.quantity,
+          icon: <BarChart2 className="w-4 h-4" />
+        },
+        {
+          label: "Price",
+          value: `$${item.price.toFixed(2)}`
+        },
+        {
+          label: "Last updated",
+          value: format(item.updatedAt, "MMM d, yyyy")
+        }
+      ],
+      badges: [
+        {
+          label: category,
+          variant: "outline" as const
+        }
+      ],
+      actions: [
+        {
+          label: "View",
+          icon: <ArrowRight className="w-4 h-4" />,
+          onClick: () => window.location.href = `/dashboard/inventory/${item.id}`
+        },
+        {
+          label: "Edit",
+          icon: <Edit className="w-4 h-4" />,
+          variant: "ghost" as const,
+          onClick: () => {
+            // Edit functionality would go here
+          }
+        },
+        {
+          label: "Delete",
+          icon: <Trash2 className="w-4 h-4" />,
+          variant: "destructive" as const,
+          onClick: () => setDeletingItemId(item.id)
+        }
+      ],
+      onClick: () => window.location.href = `/dashboard/inventory/${item.id}`
+    }))
+  )
+
   return (
     <>
-      <div className="space-y-6">
-        {Object.entries(itemsByCategory).map(([category, items]) => (
-          <div key={category} className="space-y-4">
-            <h2 className="text-xl font-medium text-gray-900">{category}</h2>
-            <ul className="grid max-w-6xl grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="relative group z-10 transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <div className="absolute z-0 inset-px rounded-lg bg-white" />
-
-                  <div className="pointer-events-none z-0 absolute inset-px rounded-lg shadow-sm transition-all duration-300 group-hover:shadow-md ring-1 ring-black/5" />
-                  <div className="relative p-6 z-10">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="size-12 bg-brand-100 rounded-full flex items-center justify-center">
-                        <Package className="size-6 text-brand-700" />
-                      </div>
-
-                      <div>
-                        <h3 className="text-lg/7 font-medium tracking-tight text-gray-950">
-                          {item.name}
-                        </h3>
-                        <p className="text-sm/6 text-gray-600">
-                          SKU: {item.sku}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 mb-6">
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <BarChart2 className="size-4 mr-2 text-brand-500" />
-                        <span className="font-medium">Quantity:</span>
-                        <span className="ml-1">{item.quantity}</span>
-                      </div>
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <span className="font-medium">Price:</span>
-                        <span className="ml-1">${item.price.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center text-sm/5 text-gray-600">
-                        <span className="font-medium">Last updated:</span>
-                        <span className="ml-1">
-                          {format(item.updatedAt, "MMM d, yyyy")}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4">
-                      <Link
-                        href={`/dashboard/inventory/${item.id}`}
-                        className={buttonVariants({
-                          variant: "outline",
-                          size: "sm",
-                          className: "flex items-center gap-2 text-sm",
-                        })}
-                      >
-                        View details <ArrowRight className="size-4" />
-                      </Link>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-brand-600 transition-colors"
-                          aria-label={`Edit ${item.name}`}
-                          // Edit functionality would go here
-                        >
-                          <Edit className="size-5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-gray-500 hover:text-red-600 transition-colors"
-                          aria-label={`Delete ${item.name}`}
-                          onClick={() => setDeletingItemId(item.id)}
-                        >
-                          <Trash2 className="size-5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <CardPageLayout
+        title="Inventory"
+        items={cardItems}
+        loading={isInventoryItemsLoading}
+        emptyMessage="No inventory items found. Create your first item to get started."
+        columns={3}
+        primaryAction={{
+          label: "Add Item",
+          icon: <Package className="w-4 h-4" />,
+          onClick: () => {
+            // This will be handled by the CreateInventoryItemModal in the page component
+          }
+        }}
+      />
 
       <Modal
         showModal={!!deletingItemId}

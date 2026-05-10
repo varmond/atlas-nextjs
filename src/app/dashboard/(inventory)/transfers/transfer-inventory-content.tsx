@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { ModernPageLayout } from "@/components/page-layouts"
 import {
   Select,
   SelectContent,
@@ -375,63 +376,12 @@ export function TransferInventoryContent({ user }: TransferInventoryContentProps
   }, [form, selectedItem])
 
   return (
-    <div className="space-y-6">
-      {/* Header with stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Available Items</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {availableInventory?.length || 0}
-              </p>
-            </div>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Locations</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {locationsData?.locations?.length || 0}
-              </p>
-            </div>
-            <div className="p-2 bg-green-100 rounded-lg">
-              <MapPin className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pending Transfers</p>
-              <p className="text-2xl font-bold text-orange-600">
-                0
-              </p>
-            </div>
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Truck className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
+    <ModernPageLayout
+      title="Transfer Inventory"
+      description="Move items between locations"
+    >
       {/* Transfer Form */}
       <Card className="p-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold flex items-center">
-            <ArrowRightLeft className="w-5 h-5 mr-2 text-blue-600" />
-            Transfer Inventory
-          </h2>
-          <p className="text-sm text-gray-600">
-            Move items between locations
-          </p>
-        </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -720,6 +670,6 @@ export function TransferInventoryContent({ user }: TransferInventoryContentProps
           </form>
         </Form>
       </Card>
-    </div>
+    </ModernPageLayout>
   )
 } 

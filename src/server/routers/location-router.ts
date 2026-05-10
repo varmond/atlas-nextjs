@@ -6,8 +6,7 @@ import { HTTPException } from "hono/http-exception"
 
 export const locationRouter = router({
   getLocations: privateProcedure.query(async ({ c, ctx }) => {
-    // Use legacy organizationId for now
-    const organizationId = ctx.user.organizationId
+    const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
     
     if (!organizationId) {
       throw new HTTPException(400, { message: "No organization context available" })
@@ -33,8 +32,7 @@ export const locationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
-        // Use legacy organizationId for now
-        const organizationId = ctx.user.organizationId
+        const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
         
         if (!organizationId) {
           throw new HTTPException(400, { message: "No organization context available" })
@@ -65,8 +63,7 @@ export const locationRouter = router({
     }))
     .mutation(async ({ c, input, ctx }) => {
       try {
-        // Use legacy organizationId for now
-        const organizationId = ctx.user.organizationId
+        const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
         
         if (!organizationId) {
           throw new HTTPException(400, { message: "No organization context available" })
@@ -95,8 +92,7 @@ export const locationRouter = router({
       id: z.string(),
     }))
     .query(async ({ c, input, ctx }) => {
-      // Use legacy organizationId for now
-      const organizationId = ctx.user.organizationId
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
       
       if (!organizationId) {
         throw new HTTPException(400, { message: "No organization context available" })

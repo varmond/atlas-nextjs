@@ -4,6 +4,7 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { ModernPageLayout } from "@/components/page-layouts"
 import { client } from "@/lib/client"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format, formatDistanceToNow } from "date-fns"
@@ -24,7 +25,12 @@ import {
   Users,
   Building2,
   Activity,
-  Warehouse
+  Warehouse,
+  Zap,
+  Target,
+  CheckCircle,
+  ArrowUpRight,
+  Sparkles
 } from "lucide-react"
 import Link from "next/link"
 import { useState, useMemo, useCallback, memo } from "react"
@@ -69,8 +75,8 @@ const mockRecentActivity = [
   },
 ]
 
-// Memoized utility functions
-const getActivityIcon = memo(({ type }: { type: string }) => {
+// Utility functions
+const getActivityIcon = (type: string) => {
   switch (type) {
     case 'dispense':
       return <MinusCircle className="w-4 h-4 text-red-500" />
@@ -81,7 +87,7 @@ const getActivityIcon = memo(({ type }: { type: string }) => {
     default:
       return <Activity className="w-4 h-4 text-gray-500" />
   }
-})
+}
 
 const getActivityColor = (type: string) => {
   switch (type) {
@@ -261,6 +267,34 @@ export const DashboardPageContent = () => {
   const [deletingCategory, setDeletingCategory] = useState<string | null>(null)
   const queryClient = useQueryClient()
   
+  // Fetch real inventory data for stats
+  const { data: inventoryData, isLoading: isInventoryLoading, error: inventoryError } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: async () => {
+      try {
+        const response = await client.inventory.getInventory.$get()
+        const data = await response.json()
+        return data.inventoryItems || []
+      } catch (err) {
+        console.error('Error fetching inventory for dashboard:', err)
+        return []
+      }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+
+  // Fetch recent activity data
+  const { data: recentActivity, isLoading: isActivityLoading } = useQuery({
+    queryKey: ["recent-activity"],
+    queryFn: async () => {
+      // For now, return mock data until we have a real activity API
+      return mockRecentActivity
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  })
+  
   // Optimized query with stale time and caching
   const { data: categories, isPending: isEventCategoriesLoading } = useQuery({
     queryKey: ["user-event-categories"],
@@ -291,34 +325,94 @@ export const DashboardPageContent = () => {
   }, [])
 
   // Memoized computed values
-  const statsData = useMemo(() => [
-    {
-      title: "Total Inventory Items",
-      value: mockInventoryStats.totalItems.toLocaleString(),
-      icon: Package,
-      trend: "+12%",
-      trendValue: "from last month"
-    },
-    {
-      title: "Low Stock Items",
-      value: mockInventoryStats.lowStock,
-      icon: AlertTriangle,
-      color: "text-orange-600"
-    },
-    {
-      title: "Expiring Soon",
-      value: mockInventoryStats.expiringSoon,
-      icon: Clock,
-      color: "text-red-600"
-    },
-    {
-      title: "Total Value",
-      value: `$${mockInventoryStats.totalValue.toLocaleString()}`,
-      icon: DollarSign,
-      trend: "+8%",
-      trendValue: "from last month"
+  const statsData = useMemo(() => {
+    if (!inventoryData) {
+      return [
+        {
+          title: "Total Inventory Items",
+          value: "Loading...",
+          icon: Package,
+          trend: "Loading",
+          trendValue: "inventory data"
+        },
+        {
+          title: "Low Stock Items",
+          value: "Loading...",
+          icon: AlertTriangle,
+          color: "text-orange-600",
+          trend: "Loading",
+          trendValue: "stock levels"
+        },
+        {
+          title: "Expiring Soon",
+          value: "Loading...",
+          icon: Clock,
+          color: "text-red-600",
+          trend: "Loading",
+          trendValue: "expiration data"
+        },
+        {
+          title: "Total Value",
+          value: "Loading...",
+          icon: DollarSign,
+          trend: "Loading",
+          trendValue: "value calculation"
+        }
+      ]
     }
-  ], [])
+
+    const today = new Date()
+    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const sevenDaysFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+    const totalItems = inventoryData.length
+    const expiringSoon = inventoryData.filter((item: any) => {
+      const expirationDate = new Date(item.expirationDate)
+      return expirationDate <= thirtyDaysFromNow && expirationDate > today
+    }).length
+    const expired = inventoryData.filter((item: any) => {
+      const expirationDate = new Date(item.expirationDate)
+      return expirationDate <= today
+    }).length
+    const lowStock = inventoryData.filter((item: any) => item.unitsReceived <= 10).length
+    const totalValue = inventoryData.reduce((sum: number, item: any) => {
+      const price = typeof item.price === 'number' ? item.price : parseFloat(item.price as string)
+      return sum + (price * item.unitsReceived)
+    }, 0)
+
+    return [
+      {
+        title: "Total Inventory Items",
+        value: totalItems.toLocaleString(),
+        icon: Package,
+        trend: totalItems > 0 ? "Active" : "No items",
+        trendValue: totalItems > 0 ? "in inventory" : "yet"
+      },
+      {
+        title: "Low Stock Items",
+        value: lowStock,
+        icon: AlertTriangle,
+        color: "text-orange-600",
+        trend: lowStock > 0 ? "Needs attention" : "All good",
+        trendValue: lowStock > 0 ? "items below threshold" : "stock levels"
+      },
+      {
+        title: "Expiring Soon",
+        value: expiringSoon,
+        icon: Clock,
+        color: "text-red-600",
+        trend: expiringSoon > 0 ? "Action required" : "No urgency",
+        trendValue: expiringSoon > 0 ? "items expiring soon" : "expiration dates"
+      },
+      {
+        title: "Total Value",
+        value: `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        icon: DollarSign,
+        trend: totalValue > 0 ? "Current value" : "No value",
+        trendValue: totalValue > 0 ? "of inventory" : "in system"
+      }
+    ]
+  }, [inventoryData])
 
   const quickActionsData = useMemo(() => [
     {
@@ -355,7 +449,7 @@ export const DashboardPageContent = () => {
     }
   ], [])
 
-  if (isEventCategoriesLoading) {
+  if (isEventCategoriesLoading || isInventoryLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner />
@@ -363,106 +457,128 @@ export const DashboardPageContent = () => {
     )
   }
 
+  if (inventoryError) {
+    return (
+      <div className="text-center py-12">
+        <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
+        <h3 className="mt-4 text-lg font-medium text-gray-900">Error Loading Dashboard</h3>
+        <p className="mt-2 text-sm text-gray-500">
+          Failed to load inventory data. Please try refreshing the page.
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <ModernPageLayout
+      title="Dashboard"
+      description="Welcome back! Here's what's happening with your inventory."
+    >
+
+      {/* Key Metrics Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsData.map((stat, index) => (
-          <StatCard key={index} {...stat} />
+          <Card key={index} className="p-6">
+            <div className="flex items-center justify-between space-y-0 pb-2">
+              <h3 className="text-sm font-medium text-muted-foreground">{stat.title}</h3>
+              <stat.icon className={`h-4 w-4 ${stat.color || 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <div className={`text-2xl font-bold ${stat.color || 'text-foreground'}`}>
+                {stat.value}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stat.trend} {stat.trendValue}
+              </p>
+            </div>
+          </Card>
         ))}
       </div>
 
-      {/* Workflow Guide */}
-      <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <div className="flex items-start space-x-4">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Package className="w-6 h-6 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Getting Started with Inventory</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Follow this workflow to properly set up your inventory system:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-semibold text-blue-600">1</span>
-                </div>
-                <span className="text-gray-700">Create Products in your catalog</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-semibold text-green-600">2</span>
-                </div>
-                <span className="text-gray-700">Add Inventory items for each product</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-semibold text-purple-600">3</span>
-                </div>
-                <span className="text-gray-700">Manage stock levels and transactions</span>
-              </div>
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Quick Actions */}
+        <Card className="lg:col-span-1">
+          <div className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+            <div className="space-y-2">
+              {quickActionsData.map((action, index) => (
+                <Link key={index} href={action.href}>
+                  <div className="flex items-center space-x-3 p-3 rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                    <div className={`p-2 rounded-md ${action.bgColor}`}>
+                      <action.icon className={`w-4 h-4 ${action.iconColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{action.title}</div>
+                      <div className="text-xs text-muted-foreground truncate">{action.description}</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {quickActionsData.map((action, index) => (
-          <QuickActionCard key={index} {...action} />
-        ))}
-      </div>
-
-      {/* Recent Activity */}
-      <Card>
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
-            <Activity className="w-5 h-5" />
-            <span>Recent Activity</span>
-          </h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Latest inventory transactions and updates
-          </p>
-        </div>
-        
-        <div className="space-y-4">
-          {mockRecentActivity.map((activity) => (
-            <ActivityItem key={activity.id} activity={activity} />
-          ))}
-        </div>
-        
-        <div className="mt-6 pt-4 border-t">
-          <Link href="/dashboard/activity">
-            <Button variant="outline" className="w-full">
-              View All Activity
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
-        </div>
-      </Card>
-
-      {/* Legacy Categories Section - Keep for now but mark as deprecated */}
-      {/* {categories && categories.length > 0 && (
-        <Card>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Event Categories (Legacy)</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              These are legacy event tracking categories. Consider migrating to the new inventory system.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-            {categories.map((category) => (
-              <CategoryCard 
-                key={category.id} 
-                category={category} 
-                onDelete={handleDeleteCategory}
-              />
-            ))}
+        {/* Recent Activity */}
+        <Card className="lg:col-span-2">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Recent Activity</h3>
+              <Link href="/dashboard/activity">
+                <Button variant="outline" size="sm">
+                  View All
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="space-y-3">
+              {recentActivity && recentActivity.length > 0 ? (
+                recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-center space-x-4 p-3 rounded-lg border">
+                    <div className="flex-shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getActivityColor(activity.type)}`}>
+                        {getActivityIcon(activity.type)}
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <p className="text-sm font-medium truncate">
+                          {activity.product}
+                        </p>
+                        <Badge variant="outline" className={`text-xs ${getActivityColor(activity.type)}`}>
+                          {activity.type}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                        <span>Qty: {activity.quantity}</span>
+                        {activity.type === 'transfer' ? (
+                          <>
+                            <span>From: {activity.from}</span>
+                            <span>To: {activity.to}</span>
+                          </>
+                        ) : (
+                          <span>Location: {activity.location}</span>
+                        )}
+                        <span>By: {activity.user}</span>
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-xs text-muted-foreground">
+                      {formatDistanceToNow(activity.timestamp, { addSuffix: true })}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <Activity className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-muted-foreground text-sm">No recent activity</p>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
-      )} */}
-    </div>
+      </div>
+    </ModernPageLayout>
   )
 }

@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useState, useMemo, useCallback, memo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, memo } from 'react'
 import { ChevronDown, ChevronUp, ChevronsUpDown, Search, Filter } from 'lucide-react'
 import { Button } from './button'
 import { Input } from './input'
 import { Card } from './card'
-import { debounce, throttle, createVirtualScroller, PERFORMANCE_CONSTANTS } from '@/lib/performance'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './table'
+import { debounce, PERFORMANCE_CONSTANTS } from '@/lib/performance'
 
 interface Column<T> {
   key: keyof T
@@ -32,186 +33,6 @@ interface DataTableProps<T> {
 }
 
 type SortDirection = 'asc' | 'desc' | null
-
-// Memoized table header component
-const TableHeader = memo(<T extends Record<string, any>>({
-  columns,
-  sortColumn,
-  sortDirection,
-  onSort,
-  onSelectAll,
-  selectable,
-  allSelected,
-  indeterminate
-}: {
-  columns: Column<T>[]
-  sortColumn: keyof T | null
-  sortDirection: SortDirection
-  onSort: (column: keyof T) => void
-  onSelectAll: (selected: boolean) => void
-  selectable?: boolean
-  allSelected: boolean
-  indeterminate: boolean
-}) => (
-  <thead className="bg-gray-50 border-b border-gray-200">
-    <tr>
-      {selectable && (
-        <th className="px-4 py-3 text-left">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            ref={(el) => {
-              if (el) el.indeterminate = indeterminate
-            }}
-            onChange={(e) => onSelectAll(e.target.checked)}
-            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-          />
-        </th>
-      )}
-      {columns.map((column) => (
-        <th
-          key={String(column.key)}
-          className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-            column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
-          }`}
-          style={{ width: column.width }}
-          onClick={() => column.sortable && onSort(column.key)}
-        >
-          <div className="flex items-center space-x-1">
-            <span>{column.header}</span>
-            {column.sortable && (
-              <div className="flex flex-col">
-                {sortColumn === column.key ? (
-                  sortDirection === 'asc' ? (
-                    <ChevronUp className="w-3 h-3" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3" />
-                  )
-                ) : (
-                  <ChevronsUpDown className="w-3 h-3 text-gray-400" />
-                )}
-              </div>
-            )}
-          </div>
-        </th>
-      ))}
-    </tr>
-  </thead>
-))
-
-// Memoized table row component
-const TableRow = memo(<T extends Record<string, any>>({
-  row,
-  columns,
-  selectable,
-  selected,
-  onSelect,
-  onRowClick,
-  index
-}: {
-  row: T
-  columns: Column<T>[]
-  selectable?: boolean
-  selected: boolean
-  onSelect: (selected: boolean) => void
-  onRowClick?: (row: T) => void
-  index: number
-}) => (
-  <tr
-    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-      onRowClick ? 'cursor-pointer' : ''
-    } ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-    onClick={() => onRowClick?.(row)}
-  >
-    {selectable && (
-      <td className="px-4 py-3">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={(e) => onSelect(e.target.checked)}
-          onClick={(e) => e.stopPropagation()}
-          className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-        />
-      </td>
-    )}
-    {columns.map((column) => (
-      <td key={String(column.key)} className="px-4 py-3 text-sm text-gray-900">
-        {column.render ? column.render(row[column.key], row) : String(row[column.key] || '')}
-      </td>
-    ))}
-  </tr>
-))
-
-// Virtual scrolling table body
-const VirtualTableBody = memo(<T extends Record<string, any>>({
-  data,
-  columns,
-  selectable,
-  selectedRows,
-  onSelectRow,
-  onRowClick,
-  itemHeight = PERFORMANCE_CONSTANTS.VIRTUAL_SCROLL_ITEM_HEIGHT
-}: {
-  data: T[]
-  columns: Column<T>[]
-  selectable?: boolean
-  selectedRows: Set<string>
-  onSelectRow: (id: string, selected: boolean) => void
-  onRowClick?: (row: T) => void
-  itemHeight?: number
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [scrollTop, setScrollTop] = useState(0)
-  const [containerHeight, setContainerHeight] = useState(0)
-
-  useEffect(() => {
-    if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight)
-    }
-  }, [])
-
-  const virtualScroller = useMemo(() => 
-    createVirtualScroller(data, itemHeight, containerHeight),
-    [data, itemHeight, containerHeight]
-  )
-
-  const visibleItems = useMemo(() => 
-    virtualScroller.getVisibleItems(scrollTop),
-    [virtualScroller, scrollTop]
-  )
-
-  const handleScroll = useCallback(
-    throttle((e: React.UIEvent<HTMLDivElement>) => {
-      setScrollTop(e.currentTarget.scrollTop)
-    }, PERFORMANCE_CONSTANTS.THROTTLE_DELAY),
-    []
-  )
-
-  return (
-    <div
-      ref={containerRef}
-      className="overflow-auto"
-      style={{ height: '400px' }}
-      onScroll={handleScroll}
-    >
-      <div style={{ height: virtualScroller.totalHeight, position: 'relative' }}>
-        {visibleItems.map(({ item, index, style }) => (
-          <div key={index} style={style}>
-            <TableRow
-              row={item}
-              columns={columns}
-              selectable={selectable}
-              selected={selectedRows.has(String(index))}
-              onSelect={(selected) => onSelectRow(String(index), selected)}
-              onRowClick={onRowClick}
-              index={index}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-})
 
 export function DataTable<T extends Record<string, any>>({
   data,
@@ -317,86 +138,185 @@ export function DataTable<T extends Record<string, any>>({
 
   if (loading) {
     return (
-      <Card className={className}>
+      <div className={className}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
         </div>
-      </Card>
+      </div>
     )
   }
 
   return (
-    <Card className={className}>
+    <div className={`border border-gray-200 rounded-lg overflow-hidden ${className}`}>
       {/* Search and filters */}
       {(searchable || filterable) && (
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {searchable && (
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <Input
-                    placeholder="Search..."
-                    onChange={(e) => debouncedSearch(e.target.value)}
-                    className="pl-10"
-                  />
+        <div className="p-4 border-b border-gray-100">
+          <div className="space-y-4">
+            {/* Search and Filter Row */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {searchable && (
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search..."
+                      onChange={(e) => debouncedSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
-            {filterable && (
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-              </Button>
-            )}
+              )}
+              {filterable && (
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Filter className="w-4 h-4 mr-2" />
+                  Filters
+                </Button>
+              )}
+            </div>
+            
+            {/* Mobile Stats */}
+            <div className="lg:hidden flex items-center justify-between text-sm text-gray-600">
+              <span>{processedData.length} total items</span>
+              {selectedRows.size > 0 && (
+                <span className="text-brand-600 font-medium">
+                  {selectedRows.size} selected
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <TableHeader
-            columns={columns}
-            sortColumn={sortColumn}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-            onSelectAll={handleSelectAll}
-            selectable={selectable}
-            allSelected={allSelected}
-            indeterminate={indeterminate}
-          />
-          <tbody className="bg-white divide-y divide-gray-200">
-            {paginatedData.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length + (selectable ? 1 : 0)}
-                  className="px-4 py-8 text-center text-gray-500"
-                >
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              paginatedData.map((row, index) => (
-                <TableRow
-                  key={index}
-                  row={row}
-                  columns={columns}
-                  selectable={selectable}
-                  selected={selectedRows.has(String(index))}
-                  onSelect={(selected) => handleSelectRow(String(index), selected)}
-                  onRowClick={onRowClick}
-                  index={index}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
+        {/* Mobile Card View */}
+        <div className="lg:hidden space-y-3 p-4">
+          {paginatedData.length === 0 ? (
+            <div className="px-4 py-8 text-center text-gray-500">
+              {emptyMessage}
+            </div>
+          ) : (
+            paginatedData.map((row, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-lg border border-gray-100 p-4 space-y-3"
+                onClick={() => onRowClick?.(row)}
+              >
+                {columns.map((column) => (
+                  <div key={column.key} className="flex justify-between items-start">
+                    <span className="text-sm font-medium text-gray-500 capitalize">
+                      {column.header}
+                    </span>
+                    <div className="text-sm text-gray-900 text-right flex-1 ml-4">
+                      {column.render ? column.render(row[column.key], row) : String(row[column.key] || '')}
+                    </div>
+                  </div>
+                ))}
+                {selectable && (
+                  <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                    <span className="text-sm text-gray-500">Select</span>
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.has(String(index))}
+                      onChange={(e) => handleSelectRow(String(index), e.target.checked)}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        
+        {/* Desktop Table View */}
+        <div className="hidden lg:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {selectable && (
+                  <TableHead className="w-12">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = indeterminate
+                      }}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </TableHead>
+                )}
+                {columns.map((column) => (
+                  <TableHead
+                    key={String(column.key)}
+                    className={column.sortable ? 'cursor-pointer hover:bg-gray-50' : ''}
+                    style={{ width: column.width }}
+                    onClick={() => column.sortable && handleSort(column.key)}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{column.header}</span>
+                      {column.sortable && (
+                        <div className="flex flex-col">
+                          {sortColumn === column.key ? (
+                            sortDirection === 'asc' ? (
+                              <ChevronUp className="w-3 h-3" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3" />
+                            )
+                          ) : (
+                            <ChevronsUpDown className="w-3 h-3 text-gray-400" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length + (selectable ? 1 : 0)}
+                    className="text-center text-gray-500 py-8"
+                  >
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedData.map((row, index) => (
+                  <TableRow
+                    key={index}
+                    className={onRowClick ? 'cursor-pointer' : ''}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    {selectable && (
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedRows.has(String(index))}
+                          onChange={(e) => handleSelectRow(String(index), e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                        />
+                      </TableCell>
+                    )}
+                    {columns.map((column) => (
+                      <TableCell key={String(column.key)}>
+                        {column.render ? column.render(row[column.key], row) : String(row[column.key] || '')}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-4 py-3 border-t border-gray-200">
+        <div className="px-4 py-3 border-t border-gray-100">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-gray-700 text-center sm:text-left">
               Showing {((currentPage - 1) * pageSize) + 1} to{' '}
@@ -429,6 +349,35 @@ export function DataTable<T extends Record<string, any>>({
           </div>
         </div>
       )}
-    </Card>
+      
+      {/* Mobile Pagination */}
+      {totalPages > 1 && (
+        <div className="lg:hidden px-4 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="flex-1 mr-2"
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-gray-700 px-2">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage === totalPages}
+              className="flex-1 ml-2"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

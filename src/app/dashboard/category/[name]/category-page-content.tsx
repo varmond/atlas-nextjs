@@ -268,7 +268,7 @@ export const CategoryPageContent = ({
         </TabsList>
         <TabsContent value={activeTab}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-16">
-            <Card className="border-2 border-brand-700">
+            <Card className="border-2 border-brand-700 [&>div:last-child]:ring-0 [&>div:last-child]:rounded-lg">
               <div className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <p className="text-sm/6 font-medium">Total events</p>
                 <BarChart className="size-4 text-muted-foreground" />

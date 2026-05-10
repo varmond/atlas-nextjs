@@ -2,26 +2,22 @@
 
 import { useState, useMemo, useCallback, memo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { DataTable } from "@/components/ui/data-table"
-import { CreateProductModal } from "@/components/create-product-modal"
+import { ModernPageLayout } from "@/components/page-layouts"
 import { client } from "@/lib/client"
 import { useQuery } from "@tanstack/react-query"
 import {
   Package,
-  Search,
-  Plus,
   Eye,
   Edit,
   Trash2,
-  DollarSign,
-  Tag,
-  Building2,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+import { CreateProductModal } from "@/components/create-product-modal"
 
 interface Product {
   id: string
@@ -43,11 +39,17 @@ interface Product {
 
 // Memoized product type badge component
 const ProductTypeBadge = memo(({ type }: { type: string }) => {
-  const colorMap = {
-    MEDICATION: "bg-blue-50 text-blue-700 border-blue-200",
-    IMMUNIZATION: "bg-green-50 text-green-700 border-green-200",
-    GENERAL: "bg-gray-50 text-gray-700 border-gray-200",
-    CUSTOM: "bg-purple-50 text-purple-700 border-purple-200",
+  const getVariant = (type: string) => {
+    switch (type) {
+      case 'MEDICATION':
+        return 'default'
+      case 'IMMUNIZATION':
+        return 'secondary'
+      case 'CUSTOM':
+        return 'outline'
+      default:
+        return 'secondary'
+    }
   }
 
   const labelMap = {
@@ -58,7 +60,7 @@ const ProductTypeBadge = memo(({ type }: { type: string }) => {
   }
 
   return (
-    <Badge variant="outline" className={colorMap[type as keyof typeof colorMap] || colorMap.GENERAL}>
+    <Badge variant={getVariant(type) as any}>
       {labelMap[type as keyof typeof labelMap] || type}
     </Badge>
   )
@@ -68,12 +70,11 @@ ProductTypeBadge.displayName = "ProductTypeBadge"
 
 // Memoized action buttons component
 const ActionButtons = memo(({ product }: { product: Product }) => (
-  <div className="flex items-center space-x-2">
+  <div className="flex items-center space-x-1">
     <Button
       variant="ghost"
       size="sm"
-      className="h-8 w-8 p-0"
-      title="View Details"
+      className="h-8 w-8 p-0 hover:bg-muted"
       asChild
     >
       <Link href={`/dashboard/products/${product.id}`}>
@@ -83,8 +84,7 @@ const ActionButtons = memo(({ product }: { product: Product }) => (
     <Button
       variant="ghost"
       size="sm"
-      className="h-8 w-8 p-0"
-      title="Edit Product"
+      className="h-8 w-8 p-0 hover:bg-muted"
       asChild
     >
       <Link href={`/dashboard/products/${product.id}?edit=true`}>
@@ -94,8 +94,7 @@ const ActionButtons = memo(({ product }: { product: Product }) => (
     <Button
       variant="ghost"
       size="sm"
-      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-      title="Delete Product"
+      className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
     >
       <Trash2 className="h-4 w-4" />
     </Button>
@@ -106,6 +105,7 @@ ActionButtons.displayName = "ActionButtons"
 
 export function ProductsPageContent() {
   const { toast } = useToast()
+  const [searchTerm, setSearchTerm] = useState("")
 
   // Query to fetch products
   const { data, isLoading, error } = useQuery({
@@ -119,41 +119,30 @@ export function ProductsPageContent() {
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
 
-  // Memoized statistics
-  const stats = useMemo(() => {
-    if (!data) return { totalProducts: 0, totalValue: '0.00', byType: {} }
-
-    const totalProducts = data.length
-    const totalValue = data.reduce((sum: number, product: Product) => {
-      // Ensure price is a number and handle null/undefined
-      const price = typeof product.price === 'number' ? product.price : 0
-      return sum + price
-    }, 0)
-
-    const byType = data.reduce((acc: Record<string, number>, product: Product) => {
-      acc[product.type] = (acc[product.type] || 0) + 1
-      return acc
-    }, {})
-
-    return {
-      totalProducts,
-      totalValue: totalValue.toFixed(2),
-      byType
-    }
-  }, [data])
+  // Filter products based on search term
+  const filteredData = useMemo(() => {
+    if (!data) return []
+    if (!searchTerm) return data
+    
+    return data.filter((product: Product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.itemCode.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [data, searchTerm])
 
   // Memoized table columns
   const columns = useMemo(() => [
     {
       key: 'name' as keyof Product,
-      header: 'Product Name',
+      header: 'Product',
       sortable: true,
       filterable: true,
-      width: 200,
+      width: 250,
       render: (value: any, row: Product) => (
-        <div>
+        <div className="space-y-1">
           <div className="font-medium">{row.name}</div>
-          <div className="text-sm text-gray-500">{row.itemCode}</div>
+          <div className="text-sm text-muted-foreground">{row.itemCode}</div>
         </div>
       ),
     },
@@ -189,144 +178,86 @@ export function ProductsPageContent() {
     },
     {
       key: 'packageUOM' as keyof Product,
-      header: 'Package Unit',
+      header: 'Package',
       sortable: true,
       filterable: true,
       width: 120,
       render: (value: any, row: Product) => (
-        <div>
+        <div className="text-sm">
           <div>{row.quantityPerContainer} {row.packageUOM}</div>
-          <div className="text-xs text-gray-500">per {row.containerUOM}</div>
+          <div className="text-xs text-muted-foreground">per {row.containerUOM}</div>
         </div>
       ),
     },
     {
-      key: 'createdAt' as keyof Product,
-      header: 'Created',
-      sortable: true,
-      filterable: true,
-      width: 120,
-      render: (value: any, row: Product) => 
-        new Date(row.createdAt).toLocaleDateString(),
-    },
-    {
       key: 'actions' as keyof Product,
-      header: 'Actions',
+      header: '',
       sortable: false,
       filterable: false,
-      width: 100,
+      width: 80,
       render: (value: any, row: Product) => <ActionButtons product={row} />,
     },
   ], [])
 
   // Memoized row click handler
   const handleRowClick = useCallback((product: Product) => {
-    // Navigate to product detail page
     window.location.href = `/dashboard/products/${product.id}`
-  }, [])
-
-  // Memoized selection change handler
-  const handleSelectionChange = useCallback((selectedProducts: Product[]) => {
-    console.log('Selected products:', selectedProducts)
   }, [])
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <Package className="mx-auto h-12 w-12 text-red-500" />
-        <h3 className="mt-4 text-lg font-medium text-gray-900">Error Loading Products</h3>
-        <p className="mt-2 text-sm text-gray-500">
-          Failed to load products. Please try again.
-        </p>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Package className="mx-auto h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-medium">Error Loading Products</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Failed to load products. Please try again.
+          </p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Value</p>
-              <p className="text-2xl font-bold text-gray-900">${stats.totalValue}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Tag className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Product Types</p>
-              <p className="text-2xl font-bold text-gray-900">{Object.keys(stats.byType).length}</p>
-            </div>
-          </div>
-        </Card>
-        
-        <Card className="p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <Building2 className="w-6 h-6 text-orange-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Active Products</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Actions Bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Products ({data?.length || 0})
-          </h2>
-        </div>
-        <div className="flex items-center space-x-3">
-          <CreateProductModal>
-            <Button className="flex items-center space-x-2">
-              <Plus className="w-4 h-4" />
-              <span>Add Product</span>
-            </Button>
-          </CreateProductModal>
+    <ModernPageLayout
+      title="Products"
+      description={`${filteredData.length} product${filteredData.length !== 1 ? 's' : ''} found`}
+      actions={
+        <CreateProductModal>
+          <Button>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Product
+          </Button>
+        </CreateProductModal>
+      }
+    >
+      {/* Search */}
+      <div className="flex items-center space-x-4">
+        <div className="relative flex-1 max-w-sm">
+          <Input
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+          <Package className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         </div>
       </div>
 
       {/* Data Table */}
       <DataTable
-        data={data || []}
+        data={filteredData}
         columns={columns}
         pageSize={25}
-        searchable={true}
+        searchable={false} // We handle search manually
         sortable={true}
-        filterable={true}
+        filterable={false}
         selectable={true}
         onRowClick={handleRowClick}
-        onSelectionChange={handleSelectionChange}
         loading={isLoading}
         emptyMessage="No products found. Create your first product to get started."
         className="w-full"
       />
-    </div>
+    </ModernPageLayout>
   )
 }

@@ -14,9 +14,14 @@ const vendorSchema = z.object({
 export const vendorRouter = router({
   getVendors: privateProcedure.query(async ({ c, ctx }) => {
     try {
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+      if (!organizationId) {
+        throw new HTTPException(400, { message: "No organization context available" })
+      }
+
       const vendors = await db.vendor.findMany({
         where: { 
-          organizationId: ctx.user.organizationId ?? "" 
+          organizationId: organizationId
         },
         select: {
           id: true,
@@ -37,10 +42,15 @@ export const vendorRouter = router({
   createVendor: privateProcedure
     .input(vendorSchema)
     .mutation(async ({ c, ctx, input }) => {
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+      if (!organizationId) {
+        throw new HTTPException(400, { message: "No organization context available" })
+      }
+
       const vendor = await db.vendor.create({
         data: {
           ...input,
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId: organizationId,
         },
       })
       return c.json({ vendor })

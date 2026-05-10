@@ -1,4 +1,3 @@
-import { DashboardPage } from "@/components/dashboard-page"
 import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
@@ -41,13 +40,7 @@ const Page = async ({ searchParams }: PageProps) => {
   return (
     <>
       {success ? <PaymentSuccessModal /> : null}
-      <DashboardPage
-        title="Dashboard"
-        subtitle="Inventory management overview and quick actions"
-        hideBackButton
-      >
-        <DashboardPageContent />
-      </DashboardPage>
+      <DashboardPageContent />
     </>
   )
 }

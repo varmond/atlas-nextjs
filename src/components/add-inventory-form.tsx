@@ -42,13 +42,11 @@ const inventoryFormSchema = z.object({
   productId: z.string().min(1, "Product is required"),
   price: z.coerce.number().positive("Price must be positive"),
   packageCost: z.coerce.number().positive("Package cost must be positive"),
-  lotNumber: z.string().min(1, "Lot number is required"),
-  expirationDate: z.date({
-    required_error: "Expiration date is required",
-  }),
-  serialNumber: z.string().min(1, "Serial number is required"),
-  vendor: z.string().min(1, "Vendor is required"),
-  manufacturer: z.string().min(1, "Manufacturer is required"),
+  lotNumber: z.string().optional(),
+  expirationDate: z.date().optional(),
+  serialNumber: z.string().optional(),
+  vendor: z.string().optional(),
+  manufacturer: z.string().optional(),
   unitsReceived: z.coerce.number().int().positive("Units must be positive"),
 })
 
@@ -66,11 +64,21 @@ export function AddInventoryForm() {
 
   // Fetch products for dropdown
   const { data: productsData, isLoading: isLoadingProducts } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["inventory-products"],
     queryFn: async () => {
       const response = await client.inventory.getProducts.$get()
       const data = await response.json()
       return data.products
+    },
+  })
+
+  // Fetch vendors for dropdown
+  const { data: vendorsData, isLoading: isLoadingVendors } = useQuery({
+    queryKey: ["vendors"],
+    queryFn: async () => {
+      const response = await client.vendor.getVendors.$get()
+      const data = await response.json()
+      return data.vendors
     },
   })
 
@@ -85,6 +93,7 @@ export function AddInventoryForm() {
       vendor: "",
       manufacturer: "",
       unitsReceived: undefined,
+      expirationDate: undefined, // No default date - allow blank
     },
   })
 
@@ -94,7 +103,11 @@ export function AddInventoryForm() {
       // Convert Date to ISO string for API
       const inventoryData = {
         ...data,
-        expirationDate: data.expirationDate.toISOString(),
+        expirationDate: data.expirationDate?.toISOString() || null,
+        lotNumber: data.lotNumber?.trim() || "",
+        serialNumber: data.serialNumber?.trim() || "",
+        manufacturer: data.manufacturer?.trim() || "",
+        vendor: data.vendor?.trim() || "",
       }
 
       const response = await client.inventory.createInventory.$post(
@@ -157,9 +170,15 @@ export function AddInventoryForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {productsData?.map((product: Product) => (
+                      {productsData?.filter(product => 
+                        product && 
+                        product.id && 
+                        product.id.trim() !== '' && 
+                        product.name && 
+                        product.name.trim() !== ''
+                      ).map((product: Product) => (
                         <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {product.sku}
+                          {product.name} - {product.sku || 'No SKU'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -228,7 +247,7 @@ export function AddInventoryForm() {
               name="lotNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Lot Number</FormLabel>
+                  <FormLabel>Lot Number (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter lot number" {...field} />
                   </FormControl>
@@ -242,7 +261,7 @@ export function AddInventoryForm() {
               name="serialNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Serial Number</FormLabel>
+                  <FormLabel>Serial Number (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter serial number" {...field} />
                   </FormControl>
@@ -256,7 +275,7 @@ export function AddInventoryForm() {
               name="expirationDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>Expiration Date</FormLabel>
+                  <FormLabel>Expiration Date (Optional)</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -295,10 +314,30 @@ export function AddInventoryForm() {
               name="vendor"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter vendor name" {...field} />
-                  </FormControl>
+                  <FormLabel>Vendor (Optional)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    disabled={isLoadingVendors}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select vendor (optional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">No vendor</SelectItem>
+                      {vendorsData?.filter(v => 
+                        v && 
+                        v.name && 
+                        v.name.trim() !== ''
+                      ).map((vendor: any) => (
+                        <SelectItem key={vendor.id || vendor.name} value={vendor.name}>
+                          {vendor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -309,7 +348,7 @@ export function AddInventoryForm() {
               name="manufacturer"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Manufacturer</FormLabel>
+                  <FormLabel>Manufacturer (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Enter manufacturer name" {...field} />
                   </FormControl>

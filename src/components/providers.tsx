@@ -8,6 +8,17 @@ export const Providers = ({ children }: PropsWithChildren) => {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 2 * 60 * 1000, // 2 minutes
+            gcTime: 5 * 60 * 1000, // 5 minutes
+            refetchOnWindowFocus: true,
+            retry: 1,
+          },
+          mutations: {
+            retry: 1,
+          },
+        },
         queryCache: new QueryCache({
           onError: (err) => {
             let errorMessage: string

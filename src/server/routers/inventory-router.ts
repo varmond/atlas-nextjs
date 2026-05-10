@@ -9,12 +9,15 @@ const inventoryCreateSchema = z.object({
   productId: z.string().min(1, "Product is required"),
   price: z.coerce.number().positive("Price must be positive"),
   packageCost: z.coerce.number().positive("Package cost must be positive"),
-  lotNumber: z.string().min(1, "Lot number is required"),
-  expirationDate: z.string(), // Will be parsed as Date in the handler
-  serialNumber: z.string().min(1, "Serial number is required"),
-  vendor: z.string().min(1, "Vendor is required"),
-  manufacturer: z.string().min(1, "Manufacturer is required"),
+  lotNumber: z.string().optional(),
+  expirationDate: z.string().optional().nullable(), // Will be parsed as Date in the handler
+  serialNumber: z.string().optional(),
+  vendor: z.string().optional(),
+  manufacturer: z.string().optional(),
   unitsReceived: z.coerce.number().int().positive("Units must be positive"),
+  locationId: z.string().min(1, "Location is required"),
+  subLocationId: z.string().optional(),
+  notes: z.string().optional(),
 })
 
 export const inventoryRouter = router({
@@ -24,10 +27,17 @@ export const inventoryRouter = router({
     }))
     .query(async ({ c, ctx, input }) => {
       try {
+        const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+        if (!organizationId) {
+          throw new HTTPException(400, {
+            message: "User does not belong to an organization",
+          })
+        }
+
         const inventoryItem = await db.inventory.findFirst({
           where: {
             id: input.id,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId: organizationId,
           },
           include: {
             product: {
@@ -69,9 +79,16 @@ export const inventoryRouter = router({
       locationId: z.string().optional(),
     }))
     .query(async ({ c, ctx, input }) => {
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+      if (!organizationId) {
+        throw new HTTPException(400, {
+          message: "User does not belong to an organization",
+        })
+      }
+
       const inventoryItems = await db.inventory.findMany({
         where: {
-          organizationId: ctx.user.organizationId ?? "",
+          organizationId: organizationId,
           productId: input.productId,
           locationId: input.locationId,
           unitsReceived: {
@@ -103,12 +120,21 @@ export const inventoryRouter = router({
     }),
 
   getProducts: privateProcedure.query(async ({ c, ctx }) => {
+    const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+    if (!organizationId) {
+      throw new HTTPException(400, {
+        message: "User does not belong to an organization",
+      })
+    }
+
     const products = await db.products.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
+      where: { organizationId: organizationId },
       select: {
         id: true,
         name: true,
         sku: true,
+        manufacturerBarcodeNumber: true,
+        type: true,
       },
       orderBy: { name: "asc" },
     })
@@ -116,10 +142,142 @@ export const inventoryRouter = router({
     return c.json({ products })
   }),
 
+  // New endpoint for smart suggestions based on product history
+  getSmartSuggestions: privateProcedure
+    .input(z.object({
+      productId: z.string(),
+    }))
+    .query(async ({ c, ctx, input }) => {
+      try {
+        const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+        if (!organizationId) {
+          throw new HTTPException(400, {
+            message: "User does not belong to an organization",
+          })
+        }
+
+        // Get product details
+        const product = await db.products.findUnique({
+          where: {
+            id: input.productId,
+            organizationId: organizationId,
+          },
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            price: true,
+            packageCost: true,
+            manufacturerBarcodeNumber: true,
+          },
+        })
+
+        if (!product) {
+          throw new HTTPException(404, { message: "Product not found" })
+        }
+
+        // Get recent inventory history for this product (last 10 receipts)
+        const recentInventory = await db.inventory.findMany({
+          where: {
+            productId: input.productId,
+            organizationId: organizationId,
+          },
+          include: {
+            Location: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            subLocation: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        })
+
+        // Analyze patterns
+        const vendorStats = recentInventory.reduce((acc, item) => {
+          acc[item.vendor] = (acc[item.vendor] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+
+        const locationStats = recentInventory.reduce((acc, item) => {
+          if (item.locationId) {
+            const key = item.locationId
+            if (!acc[key]) {
+              acc[key] = {
+                id: item.locationId,
+                name: item.Location?.name || "Unknown",
+                count: 0,
+                hasSubLocation: !!item.subLocationId,
+              }
+            }
+            acc[key].count++
+          }
+          return acc
+        }, {} as Record<string, { id: string; name: string; count: number; hasSubLocation: boolean }>)
+
+        // Calculate average costs
+        const costs = recentInventory.map(item => Number(item.packageCost))
+        const avgCost = costs.length > 0 ? costs.reduce((a, b) => a + b, 0) / costs.length : 0
+
+        // Get available locations with space
+        const locations = await db.location.findMany({
+          where: {
+            organizationId: organizationId,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+          orderBy: { name: "asc" },
+        })
+
+        // Sort suggestions by frequency
+        const vendorSuggestions = Object.entries(vendorStats)
+          .sort(([, a], [, b]) => b - a)
+          .map(([vendor, count]) => ({ vendor, count }))
+
+        const locationSuggestions = Object.values(locationStats)
+          .sort((a, b) => b.count - a.count)
+
+        return c.json({
+          product,
+          suggestions: {
+            vendors: vendorSuggestions,
+            locations: locationSuggestions,
+            avgCost: Math.round(avgCost * 100) / 100, // Round to 2 decimal places
+            recentReceipts: recentInventory.length,
+          },
+          availableLocations: locations,
+        })
+      } catch (error) {
+        console.error("Error getting smart suggestions:", error)
+        throw new HTTPException(500, {
+          message: "Failed to get smart suggestions",
+        })
+      }
+    }),
+
   createInventory: privateProcedure
     .input(inventoryCreateSchema)
     .mutation(async ({ c, input, ctx }) => {
       try {
+        const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+        if (!organizationId) {
+          throw new HTTPException(400, {
+            message: "User does not belong to an organization",
+          })
+        }
+
         const {
           productId,
           price,
@@ -130,13 +288,16 @@ export const inventoryRouter = router({
           vendor,
           manufacturer,
           unitsReceived,
+          locationId,
+          subLocationId,
+          notes,
         } = input
 
         // Check if product exists
         const product = await db.products.findUnique({
           where: {
             id: productId,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId: organizationId,
           },
         })
 
@@ -152,7 +313,7 @@ export const inventoryRouter = router({
             packageCost,
             receiptNumber: `R-${Date.now()}`, // Generate a receipt number
             userId: ctx.user.id,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId: organizationId,
           },
         })
 
@@ -162,14 +323,17 @@ export const inventoryRouter = router({
             productId,
             price,
             packageCost,
-            lotNumber,
-            expirationDate: new Date(expirationDate),
-            serialNumber,
-            vendor,
-            manufacturer,
+            lotNumber: lotNumber?.trim() || "",
+            expirationDate: expirationDate ? new Date(expirationDate) : null,
+            serialNumber: serialNumber?.trim() || "",
+            vendor: vendor?.trim() || "",
+            manufacturer: manufacturer?.trim() || "",
             unitsReceived,
+            locationId: locationId || null,
+            subLocationId: subLocationId || null,
+            notes: notes?.trim() || "",
             userId: ctx.user.id,
-            organizationId: ctx.user.organizationId ?? "",
+            organizationId: organizationId,
             headerId: inventoryHeader.id,
           },
         })
@@ -184,258 +348,48 @@ export const inventoryRouter = router({
     }),
 
   getInventoryById: privateProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ c, input, ctx }) => {
-      const { id } = input
+    .input(z.object({
+      id: z.string(),
+    }))
+    .query(async ({ c, ctx, input }) => {
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+      if (!organizationId) {
+        throw new HTTPException(400, {
+          message: "User does not belong to an organization",
+        })
+      }
 
-      const inventory = await db.inventory.findUnique({
+      const inventoryItem = await db.inventory.findFirst({
         where: {
-          id,
-          organizationId: ctx.user.organizationId ?? "",
+          id: input.id,
+          organizationId: organizationId,
         },
         include: {
           product: {
             select: {
               name: true,
               sku: true,
+              type: true,
+            },
+          },
+          Location: {
+            select: {
+              name: true,
+            },
+          },
+          subLocation: {
+            select: {
+              name: true,
+              code: true,
             },
           },
         },
       })
 
-      if (!inventory) {
+      if (!inventoryItem) {
         throw new HTTPException(404, { message: "Inventory item not found" })
       }
 
-      return c.json({ inventory })
-    }),
-
-  getLocations: privateProcedure.query(async ({ c, ctx }) => {
-    const locations = await db.location.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
-      select: {
-        id: true,
-        name: true,
-      },
-      orderBy: { name: "asc" },
-    })
-
-    return c.json({ locations })
-  }),
-
-  createBatchInventory: privateProcedure
-    .input(
-      z.object({
-        header: z.object({
-          vendor: z.string().optional(),
-          manufacturer: z.string().optional(),
-          packageCost: z.coerce.number().min(0),
-          receiptDate: z.string(),
-          receiptNumber: z.string().optional(),
-          notes: z.string().optional(),
-          locationId: z.string().min(1),
-          subLocationId: z.string().optional(),
-        }),
-        items: z.array(
-          z.object({
-            productId: z.string().min(1),
-            price: z.coerce.number().positive(),
-            lotNumber: z.string().min(1),
-            expirationDate: z.string(),
-            serialNumber: z.string().min(1),
-            unitsReceived: z.coerce.number().int().positive(),
-          })
-        ),
-      })
-    )
-    .mutation(async ({ c, input, ctx }) => {
-      try {
-        const { header, items } = input
-
-        // Create inventory header
-        const inventoryHeader = await db.inventoryHeader.create({
-          data: {
-            vendor: header.vendor ?? "",
-            manufacturer: header.manufacturer ?? "",
-            receiptNumber: header.receiptNumber || `R-${Date.now()}`,
-            notes: header.notes,
-            packageCost: header.packageCost,
-            receiptDate: new Date(header.receiptDate),
-            userId: ctx.user.id,
-            organizationId: ctx.user.organizationId ?? "",
-            locationId: header.locationId,
-          },
-        })
-
-        // Create inventory items
-        const inventoryItems = await Promise.all(
-          items.map((item) =>
-            db.inventory.create({
-              data: {
-                price: item.price,
-                packageCost: header.packageCost, // Using the header's package cost
-                lotNumber: item.lotNumber,
-                expirationDate: new Date(item.expirationDate),
-                serialNumber: item.serialNumber,
-                vendor: header.vendor ?? "", // Using the header's vendor
-                manufacturer: header.manufacturer ?? "", // Using the header's manufacturer
-                unitsReceived: item.unitsReceived,
-                userId: ctx.user.id,
-                organizationId: ctx.user.organizationId ?? "",
-                headerId: inventoryHeader.id,
-                productId: item.productId,
-                locationId: header.locationId,
-                subLocationId: header.subLocationId,
-              },
-            })
-          )
-        )
-
-        return c.json({
-          success: true,
-          inventoryHeader,
-          itemsCount: inventoryItems.length,
-        })
-      } catch (error) {
-        console.error("Error creating batch inventory:", error)
-        throw new HTTPException(500, {
-          message: "Failed to create batch inventory",
-        })
-      }
-    }),
-
-  deleteInventoryItem: privateProcedure
-    .input(z.object({
-      id: z.string().min(1, "Inventory item ID is required"),
-    }))
-    .mutation(async ({ c, input, ctx }) => {
-      try {
-        // Check if inventory item exists and belongs to organization
-        const inventoryItem = await db.inventory.findFirst({
-          where: {
-            id: input.id,
-            organizationId: ctx.user.organizationId ?? "",
-          },
-        })
-
-        if (!inventoryItem) {
-          throw new HTTPException(404, { message: "Inventory item not found" })
-        }
-
-        // Delete the inventory item
-        await db.inventory.delete({
-          where: { id: input.id },
-        })
-
-        return c.json({ success: true, message: "Inventory item deleted successfully" })
-      } catch (error) {
-        console.error("Error deleting inventory item:", error)
-        if (error instanceof HTTPException) throw error
-        throw new HTTPException(500, { message: "Failed to delete inventory item" })
-      }
-    }),
-
-  createTransfer: privateProcedure
-    .input(z.object({
-      inventoryId: z.string(),
-      quantity: z.number().int().positive(),
-      sourceLocationId: z.string(),
-      sourceSubLocationId: z.string().optional(),
-      destLocationId: z.string(),
-      destSubLocationId: z.string().optional(),
-      notes: z.string().optional(),
-    }))
-    .mutation(async ({ c, input, ctx }) => {
-      try {
-        // Start transaction
-        return await db.$transaction(async (tx) => {
-          // Check if source has enough quantity
-          const sourceInventory = await tx.inventory.findFirst({
-            where: {
-              id: input.inventoryId,
-              locationId: input.sourceLocationId,
-              organizationId: ctx.user.organizationId ?? "",
-              ...(input.sourceSubLocationId && {
-                subLocationId: input.sourceSubLocationId
-              })
-            },
-          })
-
-          if (!sourceInventory || sourceInventory.unitsReceived < input.quantity) {
-            throw new HTTPException(400, { message: "Insufficient quantity available" })
-          }
-
-          // Create transfer record
-          const transfer = await tx.inventoryTransfer.create({
-            data: {
-              quantity: input.quantity,
-              sourceLocationId: input.sourceLocationId,
-              sourceSubLocationId: input.sourceSubLocationId,
-              destLocationId: input.destLocationId,
-              destSubLocationId: input.destSubLocationId,
-              inventoryId: input.inventoryId,
-              notes: input.notes,
-              userId: ctx.user.id,
-              organizationId: ctx.user.organizationId ?? "",
-            },
-          })
-
-          // Update source inventory
-          await tx.inventory.update({
-            where: { id: input.inventoryId },
-            data: {
-              unitsReceived: sourceInventory.unitsReceived - input.quantity,
-            },
-          })
-
-          // Create or update destination inventory
-          const destInventory = await tx.inventory.findFirst({
-            where: {
-              productId: sourceInventory.productId,
-              locationId: input.destLocationId,
-              organizationId: ctx.user.organizationId ?? "",
-              ...(input.destSubLocationId && {
-                subLocationId: input.destSubLocationId
-              })
-            },
-          })
-
-          if (destInventory) {
-            await tx.inventory.update({
-              where: { id: destInventory.id },
-              data: {
-                unitsReceived: destInventory.unitsReceived + input.quantity,
-              },
-            })
-          } else {
-            await tx.inventory.create({
-              data: {
-                productId: sourceInventory.productId,
-                price: sourceInventory.price,
-                packageCost: sourceInventory.packageCost,
-                lotNumber: sourceInventory.lotNumber,
-                expirationDate: sourceInventory.expirationDate,
-                serialNumber: sourceInventory.serialNumber,
-                vendor: sourceInventory.vendor,
-                manufacturer: sourceInventory.manufacturer,
-                unitsReceived: input.quantity,
-                locationId: input.destLocationId,
-                ...(input.destSubLocationId && {
-                  subLocationId: input.destSubLocationId
-                }),
-                organizationId: ctx.user.organizationId ?? "",
-                userId: ctx.user.id,
-                headerId: sourceInventory.headerId,
-              },
-            })
-          }
-
-          return c.json({ success: true, transfer })
-        })
-      } catch (error) {
-        console.error("Error creating transfer:", error)
-        if (error instanceof HTTPException) throw error
-        throw new HTTPException(500, { message: "Failed to create transfer" })
-      }
+      return c.json({ inventoryItem })
     }),
 })

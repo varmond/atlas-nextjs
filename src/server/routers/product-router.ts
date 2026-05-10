@@ -7,8 +7,16 @@ import { HTTPException } from "hono/http-exception"
 
 export const productRouter = router({
   getProducts: privateProcedure.query(async ({ c, ctx }) => {
+    const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+    
+    if (!organizationId) {
+      throw new HTTPException(400, {
+        message: "User does not belong to an organization",
+      })
+    }
+
     const products = await db.products.findMany({
-      where: { organizationId: ctx.user.organizationId ?? "" },
+      where: { organizationId },
       select: {
         id: true,
         itemCode: true,
@@ -77,7 +85,8 @@ export const productRouter = router({
       } = input
 
       // Check if user has an organization
-      if (!user.organizationId) {
+      const organizationId = user.currentOrganizationId || user.organizationId
+      if (!organizationId) {
         throw new HTTPException(400, {
           message: "User does not belong to an organization",
         })
@@ -99,7 +108,7 @@ export const productRouter = router({
             unitUOM,
             unitQuantity: new Prisma.Decimal(unitQuantity),
             userId: user.id,
-            organizationId: user.organizationId,
+            organizationId: organizationId,
           },
         })
 
@@ -163,7 +172,8 @@ export const productRouter = router({
       } = input
 
       // Check if user has an organization
-      if (!user.organizationId) {
+      const organizationId = user.currentOrganizationId || user.organizationId
+      if (!organizationId) {
         throw new HTTPException(400, {
           message: "User does not belong to an organization",
         })
@@ -173,7 +183,7 @@ export const productRouter = router({
         const product = await db.products.update({
           where: {
             id,
-            organizationId: user.organizationId,
+            organizationId: organizationId,
           },
           data: {
             itemCode,
@@ -212,7 +222,8 @@ export const productRouter = router({
     .mutation(async ({ c, input, ctx }) => {
       const { id } = input
 
-      if (!ctx.user.organizationId) {
+      const organizationId = ctx.user.currentOrganizationId || ctx.user.organizationId
+      if (!organizationId) {
         throw new HTTPException(400, {
           message: "User does not belong to an organization",
         })
@@ -222,7 +233,7 @@ export const productRouter = router({
         await db.products.delete({
           where: {
             id,
-            organizationId: ctx.user.organizationId,
+            organizationId: organizationId,
           },
         })
 

@@ -53,6 +53,12 @@ enum BenefitType {
   FREE_SERVICE
 }
 
+enum SupportTier {
+  NONE
+  BASIC      // Can view data only
+  FULL       // Can modify data
+}
+
 model User {
   id         String  @id @default(cuid())
   externalId String? @unique
@@ -68,6 +74,9 @@ model User {
   
   // Super admin flag
   isSuperAdmin   Boolean          @default(false)
+  
+  // Support tier for admin users
+  supportTier    SupportTier      @default(NONE)
   
   // Current active organization
   currentOrganizationId String?
@@ -96,9 +105,66 @@ model User {
 
   membershipSubscriptions MembershipSubscription[]
 
+  // Admin audit relations
+  adminActions   AdminAuditLog[]  @relation("AdminActions")
+  adminTargets   AdminAuditLog[]  @relation("AdminTargets")
+  supportAccess  SupportAccess[]  @relation("SupportAccess")
+  patientAccessLogs PatientAccessLog[]
+
   @@index([email, apiKey])
   @@index([currentOrganizationId])
   @@index([organizationId])
+}
+
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  adminUserId    String
+  adminUser      User     @relation("AdminActions", fields: [adminUserId], references: [id])
+  
+  action         String   // "VIEW_ORG", "IMPERSONATE_USER", "MODIFY_DATA", "EXPORT_DATA"
+  targetUserId   String?
+  targetUser     User?    @relation("AdminTargets", fields: [targetUserId], references: [id])
+  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  resourceType   String?  // "Patient", "Inventory", "Invoice", etc.
+  resourceId     String?  // ID of the specific record accessed
+  
+  details        Json?    // Store what was accessed/changed
+  ipAddress      String?
+  userAgent      String?
+  
+  createdAt      DateTime @default(now())
+  
+  @@index([adminUserId])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model SupportAccess {
+  id             String    @id @default(cuid())
+  supportUserId  String
+  supportUser    User      @relation("SupportAccess", fields: [supportUserId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  reason         String    // Required reason for access
+  grantedBy      String?   // User who granted access (if customer-initiated)
+  
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime  // Auto-expire after X hours (default 24)
+  revokedAt      DateTime?
+  revokedBy      String?
+  revocationReason String?
+  
+  createdAt      DateTime  @default(now())
+  
+  @@index([supportUserId, organizationId])
+  @@index([expiresAt])
+  @@index([isActive])
 }
 
 model EventCategory {
@@ -346,6 +412,10 @@ model Organization {
 
   membershipTiers MembershipTier[]
 
+  // Audit relations
+  supportAccessGrants SupportAccess[]
+  adminAuditLogs     AdminAuditLog[]
+
   @@index([id])
 }
 
@@ -359,11 +429,43 @@ model Patient {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
+  // Access tracking fields
+  lastAccessedAt DateTime?
+  lastAccessedBy String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   Invoice   Invoice[]
+  accessLog PatientAccessLog[]
 
   @@index([organizationId])
+}
+
+model PatientAccessLog {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  action        String   // "VIEW", "EDIT", "CREATE", "DELETE", "EXPORT"
+  reason        String?  // Required for HIPAA audits
+  
+  ipAddress     String?
+  userAgent     String?
+  
+  // What was accessed/changed
+  fieldAccessed String?  // Specific field if applicable
+  oldValue      Json?
+  newValue      Json?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([patientId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
 }
 
 model Invoice {

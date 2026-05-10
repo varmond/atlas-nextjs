@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { ModernPageLayout } from "@/components/page-layouts"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, AlertTriangle, CheckCircle, Package, MinusCircle } from "lucide-react"
+import { Loader2, AlertTriangle, CheckCircle, Package, MinusCircle, RefreshCw } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -172,14 +173,16 @@ export function DispenseContent({ user }: DispenseContentProps) {
   const watchedQuantity = form.watch("quantity")
 
   // Fetch inventory data with optimized caching
-  const { data: inventoryData, isLoading: isLoadingInventory } = useQuery({
+  const { data: inventoryData, isLoading: isLoadingInventory, refetch: refetchInventory } = useQuery({
     queryKey: ["inventory"],
     queryFn: async () => {
       const response = await client.inventory.getInventory.$get()
       return response.json()
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 1 * 60 * 1000, // 1 minute - shorter for dispense operations
+    gcTime: 3 * 60 * 1000, // 3 minutes
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   })
 
   // Memoized filtered inventory (only available items)
@@ -221,7 +224,10 @@ export function DispenseContent({ user }: DispenseContentProps) {
           ...old,
           inventoryItems: old.inventoryItems.map((item: InventoryItem) => 
             item.id === values.inventoryId 
-              ? { ...item, unitsReceived: item.unitsReceived - values.quantity }
+              ? { 
+                  ...item, 
+                  unitsReceived: Math.max(0, item.unitsReceived - values.quantity) 
+                }
               : item
           )
         }
@@ -246,11 +252,13 @@ export function DispenseContent({ user }: DispenseContentProps) {
         description: "Inventory dispensed successfully",
       })
       form.reset()
-      // Refetch inventory to ensure data consistency
+      
+      // Force refetch inventory to ensure data consistency
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
+      queryClient.refetchQueries({ queryKey: ["inventory"] })
     },
     onSettled: () => {
-      // Always refetch after error or success
+      // Always refetch after error or success to ensure UI consistency
       queryClient.invalidateQueries({ queryKey: ["inventory"] })
     },
   })
@@ -299,66 +307,29 @@ export function DispenseContent({ user }: DispenseContentProps) {
   }, [form, selectedItem])
 
   return (
-    <div className="space-y-6">
-      {/* Header with stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Available Items</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {availableInventory?.length || 0}
-              </p>
-            </div>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Package className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Units</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {availableInventory?.reduce((total: number, item: InventoryItem) => 
-                  total + item.unitsReceived, 0) || 0}
-              </p>
-            </div>
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Low Stock Items</p>
-              <p className="text-2xl font-bold text-orange-600">
-                {availableInventory?.filter((item: InventoryItem) => 
-                  item.unitsReceived <= 10
-                ).length || 0}
-              </p>
-            </div>
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <AlertTriangle className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </Card>
-      </div>
-
+    <ModernPageLayout
+      title="Dispense Inventory"
+      description="Remove items from inventory stock"
+      actions={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await refetchInventory()
+            toast({
+              title: "Inventory Refreshed",
+              description: "Available inventory has been updated",
+            })
+          }}
+          disabled={isLoadingInventory}
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingInventory ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      }
+    >
       {/* Dispense Form */}
       <Card className="p-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold flex items-center">
-            <MinusCircle className="w-5 h-5 mr-2 text-red-600" />
-            Dispense Inventory
-          </h2>
-          <p className="text-sm text-gray-600">
-            Remove items from inventory stock
-          </p>
-        </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -512,6 +483,6 @@ export function DispenseContent({ user }: DispenseContentProps) {
           </form>
         </Form>
       </Card>
-    </div>
+    </ModernPageLayout>
   )
 } 

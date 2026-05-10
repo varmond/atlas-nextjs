@@ -1,8 +1,7 @@
-import { DashboardPage } from "@/components/dashboard-page"
 import { currentUser } from "@clerk/nextjs/server"
 import { redirect } from "next/navigation"
 import { db } from "@/db"
-import { ViewInventoryPageContent } from "./view-inventory-page-content"
+import ViewInventoryPageContent from "./view-inventory-page-content"
 
 // export const metadata = {
 //   title: "View Inventory | PeppersAtlas",
@@ -54,13 +53,5 @@ export default async function ViewInventoryPage() {
     packageCost: item.packageCost.toString(),
   }))
 
-  return (
-    <DashboardPage 
-      title="Inventory" 
-      subtitle="View and manage your inventory items"
-      hideBackButton={true}
-    >
-      <ViewInventoryPageContent initialInventory={serializedInventory} />
-    </DashboardPage>
-  )
+  return <ViewInventoryPageContent initialInventory={serializedInventory} />
 }

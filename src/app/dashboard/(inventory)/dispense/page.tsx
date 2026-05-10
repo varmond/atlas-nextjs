@@ -1,4 +1,3 @@
-import { DashboardPage } from "@/components/dashboard-page"
 import { db } from "@/db"
 import { currentUser } from "@clerk/nextjs/server"
 import { notFound } from "next/navigation"
@@ -22,11 +21,5 @@ export default async function DispensePage() {
     return notFound()
   }
 
-  return (
-    <DashboardPage 
-      title="Dispense Inventory"
-    >
-      <DispenseContent user={user} />
-    </DashboardPage>
-  )
+  return <DispenseContent user={user} />
 } 

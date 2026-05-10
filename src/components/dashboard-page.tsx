@@ -19,7 +19,7 @@ export const DashboardPage = ({
   title,
   children,
   cta,
-  hideBackButton,
+  hideBackButton = true, // Default to hiding back button
   subtitle,
   breadcrumbs,
 }: DashboardPageProps) => {

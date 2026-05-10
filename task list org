@@ -1,0 +1,606 @@
+# Cursor Agent Task List: Multi-Tenant Admin & Audit System
+
+## Phase 1: Schema Updates (Priority: High)
+
+### Task 1.1: Add Support Tier Enum to Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add this enum after the existing enums
+
+```prisma
+enum SupportTier {
+  NONE
+  BASIC      // Can view data only
+  FULL       // Can modify data
+}
+```
+
+### Task 1.2: Add AdminAuditLog Model to Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add this model after the User model
+
+```prisma
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  adminUserId    String
+  adminUser      User     @relation("AdminActions", fields: [adminUserId], references: [id])
+  
+  action         String   // "VIEW_ORG", "IMPERSONATE_USER", "MODIFY_DATA", "EXPORT_DATA"
+  targetUserId   String?
+  targetUser     User?    @relation("AdminTargets", fields: [targetUserId], references: [id])
+  
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  resourceType   String?  // "Patient", "Inventory", "Invoice", etc.
+  resourceId     String?  // ID of the specific record accessed
+  
+  details        Json?    // Store what was accessed/changed
+  ipAddress      String?
+  userAgent      String?
+  
+  createdAt      DateTime @default(now())
+  
+  @@index([adminUserId])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@index([action])
+}
+```
+
+### Task 1.3: Add SupportAccess Model to Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add this model after AdminAuditLog
+
+```prisma
+model SupportAccess {
+  id             String    @id @default(cuid())
+  supportUserId  String
+  supportUser    User      @relation("SupportAccess", fields: [supportUserId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  reason         String    // Required reason for access
+  grantedBy      String?   // User who granted access (if customer-initiated)
+  
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime  // Auto-expire after X hours (default 24)
+  revokedAt      DateTime?
+  revokedBy      String?
+  revocationReason String?
+  
+  createdAt      DateTime  @default(now())
+  
+  @@index([supportUserId, organizationId])
+  @@index([expiresAt])
+  @@index([isActive])
+}
+```
+
+### Task 1.4: Add PatientAccessLog Model to Prisma Schema (HIPAA Compliance)
+**File:** `schema.prisma`
+**Action:** Add this model near the Patient model
+
+```prisma
+model PatientAccessLog {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  action        String   // "VIEW", "EDIT", "CREATE", "DELETE", "EXPORT"
+  reason        String?  // Required for HIPAA audits
+  
+  ipAddress     String?
+  userAgent     String?
+  
+  // What was accessed/changed
+  fieldAccessed String?  // Specific field if applicable
+  oldValue      Json?
+  newValue      Json?
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([patientId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+}
+```
+
+### Task 1.5: Update User Model in Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add these new fields and relations to the existing User model (verify isSuperAdmin already exists):
+
+```prisma
+model User {
+  // ... existing fields ...
+  
+  // Super admin flag (already exists - verify it's there)
+  isSuperAdmin   Boolean          @default(false)
+  
+  // ADD THIS NEW FIELD:
+  supportTier    SupportTier      @default(NONE)
+  
+  // ADD THESE NEW RELATIONS at the end of the model:
+  adminActions   AdminAuditLog[]  @relation("AdminActions")
+  adminTargets   AdminAuditLog[]  @relation("AdminTargets")
+  supportAccess  SupportAccess[]  @relation("SupportAccess")
+  patientAccessLogs PatientAccessLog[]
+  
+  // ... rest of existing fields ...
+}
+```
+
+### Task 1.6: Update Patient Model in Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add these fields to track last access in the existing Patient model:
+
+```prisma
+model Patient {
+  // ... existing fields ...
+  
+  // ADD THESE NEW FIELDS:
+  lastAccessedAt DateTime?
+  lastAccessedBy String?
+  
+  // ADD THIS RELATION:
+  accessLog      PatientAccessLog[]
+  
+  // ... rest of existing fields ...
+}
+```
+
+### Task 1.7: Update Organization Model in Prisma Schema
+**File:** `schema.prisma`
+**Action:** Add audit log relations to the existing Organization model:
+
+```prisma
+model Organization {
+  // ... existing fields ...
+  
+  // ADD THESE RELATIONS:
+  supportAccessGrants SupportAccess[]
+  adminAuditLogs     AdminAuditLog[]
+  
+  // ... rest of existing fields ...
+}
+```
+
+### Task 1.8: Run Prisma Migration
+**Terminal Command:**
+
+```bash
+npx prisma migrate dev --name add_admin_audit_system
+npx prisma generate
+```
+
+---
+
+## Phase 2: Utility Functions & Middleware (Priority: High)
+
+### Task 2.1: Create Admin Audit Logging Service
+**Action:** Create a new service/utility file for admin audit logging with these functions:
+- `logAdminAction()` - Log any admin action with parameters: adminUserId, action, organizationId, targetUserId, resourceType, resourceId, details, ipAddress, userAgent
+- `getAdminAuditLogs()` - Retrieve audit logs with filters: adminUserId, organizationId, startDate, endDate, action, limit
+
+**Required functionality:**
+- Create AdminAuditLog records in the database
+- Include related user, organization data when querying
+- Support filtering by date range, user, org, and action type
+- Default to 100 record limit, ordered by most recent first
+
+### Task 2.2: Create Patient Access Logging Service
+**Action:** Create a new service/utility file for patient access audit logging with these functions:
+- `logPatientAccess()` - Log patient data access with parameters: patientId, userId, action (VIEW/EDIT/CREATE/DELETE/EXPORT), reason, ipAddress, userAgent, fieldAccessed, oldValue, newValue
+- `getPatientAccessLogs()` - Retrieve patient access logs for a specific patient
+
+**Required functionality:**
+- Create PatientAccessLog records in database
+- Update Patient.lastAccessedAt and Patient.lastAccessedBy for VIEW/EDIT actions
+- Include user information when querying logs
+- Default to 50 record limit, ordered by most recent first
+
+### Task 2.3: Create Support Access Management Service
+**Action:** Create a new service/utility file for managing temporary support access with these functions:
+- `grantSupportAccess()` - Grant temporary support access with parameters: supportUserId, organizationId, reason, grantedBy, durationHours (default 24), ipAddress
+- `revokeSupportAccess()` - Revoke support access by accessId, revokedBy, reason
+- `checkSupportAccess()` - Check if user has active support access to an organization (returns boolean)
+- `getActiveSupportAccess()` - Get all active support access grants for a user
+- `cleanupExpiredSupportAccess()` - Deactivate expired support access (for cron job)
+
+**Required functionality:**
+- Create SupportAccess records with automatic expiration calculation
+- Log all grant/revoke actions to AdminAuditLog
+- Check for active, non-expired, non-revoked access
+- Support revoking with reason tracking
+
+### Task 2.4: Create Permission Checking Middleware/Utilities
+**Action:** Create permission checking utilities with these functions:
+- `requireSuperAdmin()` - Check if user has super admin access (isSuperAdmin or supportTier != NONE), throw error if not
+- `requireOrgAccess()` - Check if user can access organization (member OR super admin OR active support access), optionally check for specific role (OWNER/ADMIN/MEMBER)
+- `requirePatientAccess()` - Check if user can access a specific patient by checking their organization access
+
+**Required functionality:**
+- Query UserOrganization for membership
+- Check User.isSuperAdmin and User.supportTier
+- Call checkSupportAccess() for temporary access verification
+- Throw UnauthorizedError with descriptive messages
+- Support role hierarchy (OWNER > ADMIN > MEMBER)
+- Return access information (membership, hasSupportAccess flags)
+
+---
+
+## Phase 3: API Route Updates (Priority: Medium)
+
+### Task 3.1: Create Admin Audit Log API Endpoint
+**Action:** Create API endpoint for fetching admin audit logs (GET /api/admin/audit-logs)
+
+**Requirements:**
+- Require super admin authentication
+- Accept query parameters: organizationId, action, limit
+- Return audit logs with related user and organization data
+- Handle errors appropriately
+
+### Task 3.2: Create Support Access API Endpoints
+**Action:** Create API endpoints for managing support access:
+- POST /api/admin/support-access - Grant new support access
+- GET /api/admin/support-access - Get active support access for current user
+- DELETE /api/admin/support-access?id=xxx - Revoke support access
+
+**Requirements:**
+- All endpoints require super admin authentication
+- POST: Accept organizationId, reason, durationHours in body; extract IP from headers
+- GET: Return all active support access grants
+- DELETE: Accept accessId as query param
+- Log all actions via logAdminAction()
+
+### Task 3.3: Update Patient API Routes with Audit Logging
+**Action:** Find all existing patient API routes and wrap them with audit logging
+
+**Requirements:**
+- Import and use logPatientAccess() function
+- Import and use requirePatientAccess() for permission checking
+- Log appropriate action: VIEW for GET, EDIT for PUT/PATCH, CREATE for POST, DELETE for DELETE
+- Extract IP address from request headers (x-forwarded-for or x-real-ip)
+- Extract user agent from request headers
+- Apply to all patient endpoints: list, get by id, create, update, delete
+
+---
+
+## Phase 4: Frontend Components (Priority: Low)
+
+### Task 4.1: Create Admin Audit Log Viewer Component
+**Action:** Create a React component to display admin audit logs
+
+**Requirements:**
+- Fetch logs from /api/admin/audit-logs
+- Accept optional organizationId prop for filtering
+- Display table with columns: Date, Admin User, Action, Organization, IP Address
+- Include loading state
+- Format dates for readability
+- Handle errors gracefully
+
+### Task 4.2: Create Support Access Request Component
+**Action:** Create a React form component for requesting support access
+
+**Requirements:**
+- Accept organizationId as prop
+- Form fields: reason (required textarea), duration dropdown (4/8/24/72 hours)
+- POST to /api/admin/support-access on submit
+- Show loading state during submission
+- Display success/error messages
+- Clear form after successful submission
+- Disable submit button when loading or reason is empty<tbody className="bg-white divide-y divide-gray-200">
+            {logs.map((log) => (
+              <tr key={log.id}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {new Date(log.createdAt).toLocaleString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {log.adminUser.email}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {log.action}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {log.organization?.name || '-'}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {log.ipAddress || '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+```
+
+### Task 4.2: Create Support Access Request Component
+**File:** `src/components/admin/support-access-form.tsx` (create new file)
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export function SupportAccessForm({ organizationId }: { organizationId: string }) {
+  const [reason, setReason] = useState('');
+  const [duration, setDuration] = useState(24);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/admin/support-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId,
+          reason,
+          durationHours: duration,
+        }),
+      });
+
+      if (response.ok) {
+        alert('Support access granted successfully');
+        setReason('');
+      } else {
+        alert('Failed to grant support access');
+      }
+    } catch (error) {
+      console.error('Error granting support access:', error);
+      alert('An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+      <h3 className="text-lg font-semibold">Request Support Access</h3>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Reason (Required)
+        </label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          required
+          rows={3}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+          placeholder="Describe why you need access..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Duration (Hours)
+        </label>
+        <select
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+        >
+          <option value={4}>4 hours</option>
+          <option value={8}>8 hours</option>
+          <option value={24}>24 hours</option>
+          <option value={72}>72 hours</option>
+        </select>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading || !reason}
+        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
+      >
+        {loading ? 'Requesting...' : 'Request Access'}
+      </button>
+    </form>
+  );
+}
+```
+
+---
+
+## Phase 5: Cron Jobs & Background Tasks (Priority: Low)
+
+### Task 5.1: Create Cron Job Endpoint for Cleanup
+**Action:** Create API endpoint to cleanup expired support access (GET /api/cron/cleanup-support-access)
+
+**Requirements:**
+- Verify authorization using CRON_SECRET from environment variables
+- Call cleanupExpiredSupportAccess() function
+- Return count of deactivated access grants
+- Handle errors appropriately
+
+### Task 5.2: Configure Cron Job Schedule
+**Action:** Add cron job configuration to run cleanup hourly
+
+**Requirements:**
+- If using Vercel: Create or update vercel.json with cron configuration
+- If using other platform: Document how to set up scheduled job
+- Schedule: Every hour (0 * * * *)
+- Endpoint: /api/cron/cleanup-support-access
+
+---
+
+## Phase 6: Environment Variables (Priority: High)
+
+### Task 6.1: Add Required Environment Variables
+**Action:** Add these variables to your environment configuration
+
+**Required variables:**
+```
+CRON_SECRET=<generate-random-secret>
+DEFAULT_SUPPORT_ACCESS_HOURS=24
+MAX_SUPPORT_ACCESS_HOURS=72
+```
+
+**Instructions:**
+- Generate CRON_SECRET using: `openssl rand -base64 32`
+- Add to .env.local for local development
+- Add to production environment variables
+- Update .env.example if you have one
+
+---
+
+## Phase 7: Database Migration & Initial Setup (Priority: Critical)
+
+### Task 7.1: Run Prisma Migration
+**Action:** Generate and run database migration
+
+**Commands:**
+```bash
+npx prisma migrate dev --name add_admin_audit_system
+npx prisma generate
+```
+
+### Task 7.2: Set Super Admin Flag
+**Action:** Manually set isSuperAdmin and supportTier for initial admin user(s)
+
+**SQL (run in database):**
+```sql
+-- Replace 'your-user-id' with actual user ID
+UPDATE "User" 
+SET "isSuperAdmin" = true, "supportTier" = 'FULL'
+WHERE id = 'your-user-id';
+```
+
+Or use Prisma Studio:
+```bash
+npx prisma studio
+```
+
+---
+
+## Testing Checklist
+
+### Manual Testing Tasks:
+
+#### Authentication & Authorization Tests:
+- [ ] Verify super admin can access admin endpoints
+- [ ] Verify non-super admin gets 401 on admin endpoints
+- [ ] Verify super admin can access any organization's data
+- [ ] Verify regular users can only access their own organization
+- [ ] Test role hierarchy (OWNER > ADMIN > MEMBER)
+
+#### Support Access Tests:
+- [ ] Grant support access to an organization (24 hours)
+- [ ] Verify access is active and allows data access
+- [ ] Check that access expires after duration
+- [ ] Test revoking access before expiration
+- [ ] Verify expired/revoked access doesn't allow data access
+- [ ] Test cleanup cron job removes expired access
+
+#### Audit Logging Tests:
+- [ ] Access patient data and verify PatientAccessLog created
+- [ ] Check Patient.lastAccessedAt and lastAccessedBy updated
+- [ ] Verify all admin actions logged to AdminAuditLog
+- [ ] Test viewing audit logs via API
+- [ ] Filter audit logs by organization, action, date
+
+#### Patient Access Tests:
+- [ ] View patient and verify VIEW log created
+- [ ] Edit patient and verify EDIT log created with old/new values
+- [ ] Delete patient and verify DELETE log created
+- [ ] Export patient data and verify EXPORT log created
+- [ ] View patient access history
+
+#### API Integration Tests:
+- [ ] Test GET /api/admin/audit-logs with various filters
+- [ ] Test POST /api/admin/support-access with valid data
+- [ ] Test GET /api/admin/support-access returns active grants
+- [ ] Test DELETE /api/admin/support-access revokes access
+- [ ] Verify all endpoints check authentication
+- [ ] Test error handling for invalid requests
+
+#### Frontend Tests (if components created):
+- [ ] Audit log viewer displays logs correctly
+- [ ] Support access form submits successfully
+- [ ] Loading states display appropriately
+- [ ] Error messages show when API calls fail
+
+---
+
+## Additional Recommendations
+
+### Security Enhancements:
+1. **IP Whitelisting:** Consider restricting super admin access to specific IPs
+2. **MFA Requirement:** Require multi-factor auth for super admin users
+3. **Session Timeout:** Implement shorter session timeouts for admin users
+4. **Re-authentication:** Require password re-entry before granting support access
+
+### Compliance Features:
+1. **Customer Notifications:** Add email notifications when support accesses their data
+2. **Data Minimization:** Only show data fields necessary for support task
+3. **Export Restrictions:** Rate-limit data exports from admin accounts
+4. **Audit Report Generation:** Create monthly audit reports for compliance
+
+### Monitoring:
+1. **Alert on Admin Actions:** Set up alerts for sensitive admin actions
+2. **Dashboard Metrics:** Track admin access patterns and anomalies
+3. **Log Retention:** Ensure audit logs retained for required compliance period (typically 7 years for HIPAA)
+
+---
+
+## Implementation Order (Recommended):
+
+1. **Phase 1** - Schema updates and migrations (Day 1)
+2. **Task 7.2** - Set initial super admin (Day 1)
+3. **Phase 2** - Core utility functions (Day 1-2)
+4. **Task 3.3** - Update patient routes with logging (Day 2)
+5. **Phase 6** - Environment variables (Day 2)
+6. **Phase 3** - Admin API endpoints (Day 3)
+7. **Phase 4** - Frontend components (Day 3-4)
+8. **Phase 5** - Cron jobs (Day 4)
+9. **Testing** - Comprehensive testing (Day 5)
+
+---
+
+## Notes for Cursor Agent:
+
+- Use existing Prisma client instance in the project
+- Follow existing code style and patterns
+- Use existing authentication method (appears to be NextAuth based on schema)
+- Maintain consistency with existing API route structure
+- Use existing error handling patterns
+- Follow existing naming conventions for files and functions
+- Integrate with existing UI component library (if any)
+- Use existing TypeScript configurations and types
+
+---
+
+## Rollback Plan:
+
+If issues arise during implementation:
+
+1. **Revert migration:**
+   ```bash
+   npx prisma migrate resolve --rolled-back add_admin_audit_system
+   ```
+
+2. **Remove code changes:** Use git to revert code changes
+   
+3. **Keep data safe:** Audit log tables can be dropped without affecting core business data
+
+---
+
+## Success Criteria:
+
+✅ All Prisma models created and migrated successfully
+✅ Super admin can access any organization's data with audit trail
+✅ Support access grants work with time-based expiration
+✅ All patient data access is logged
+✅ Admin actions are tracked in audit logs
+✅ Permission checks prevent unauthorized access
+✅ Cron job successfully cleans up expired access ✅ No existing functionality is broken
+✅ All tests pass
